@@ -1,0 +1,73 @@
+.geoCard {
+  background: var(--surface-container) !important;
+}
+
+.bars {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  margin-bottom: var(--sp-6);
+}
+
+.miniBar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.miniBarHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.track {
+  height: 6px;
+  background: var(--surface-container-high);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+
+.fill {
+  height: 100%;
+  border-radius: var(--radius-full);
+  transition: width 1s ease;
+}
+
+.summary {
+  padding: var(--sp-4);
+  background: var(--surface-container-low);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--sp-4);
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  margin-top: var(--sp-4);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+
+.improvements {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.improvement {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+}
+
+.impIcon {
+  color: var(--secondary);
+  flex-shrink: 0;
+  font-weight: 700;
+}

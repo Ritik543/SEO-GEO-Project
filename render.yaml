@@ -1,0 +1,53 @@
+services:
+  # 1. API Web Service
+  - type: web
+    name: seo-geo-api
+    env: node
+    plan: free
+    rootDir: server
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MONGODB_URI
+        fromConfig: mongodb
+      - key: REDIS_URL
+        fromConfig: redis
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: FREE_MODE
+        value: "true"
+
+  # 2. Audit Background Worker
+  - type: worker
+    name: seo-geo-worker
+    env: node
+    plan: free
+    rootDir: server
+    buildCommand: npm install
+    startCommand: npm run worker
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: MONGODB_URI
+        fromConfig: mongodb
+      - key: REDIS_URL
+        fromConfig: redis
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: FREE_MODE
+        value: "true"
+
+  # 3. Redis Instance (Required for BullMQ)
+  - type: redis
+    name: redis
+    plan: free
+    ipAllowList: [] # Only allow internal access
+
+databases:
+  # 4. MongoDB Database
+  - name: mongodb
+    plan: free
+    type: mongodb
+    databaseName: lumen-audit

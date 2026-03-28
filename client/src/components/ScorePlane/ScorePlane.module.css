@@ -1,0 +1,36 @@
+.plane {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-10);
+  padding: var(--sp-8) !important;
+}
+
+.overall {
+  flex-shrink: 0;
+}
+
+.categories {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-around;
+  gap: var(--sp-6);
+}
+
+.ringWrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+@media (max-width: 768px) {
+  .plane {
+    flex-direction: column;
+    padding: var(--sp-6) !important;
+  }
+
+  .categories {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+}

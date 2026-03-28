@@ -1,0 +1,84 @@
+.issueCard {
+  padding: 0 !important;
+  overflow: hidden;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--sp-6);
+  background: var(--surface-container-low);
+}
+
+.count {
+  font-size: 0.875rem;
+}
+
+.filters {
+  display: flex;
+  gap: var(--sp-1);
+  padding: var(--sp-2) var(--sp-6);
+  background: var(--surface-container);
+}
+
+.filterBtn {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding: var(--sp-2) var(--sp-4);
+  border-radius: var(--radius-full);
+  border: none;
+  background: transparent;
+  color: var(--on-surface-variant);
+  font-family: var(--font-label);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.filterBtn:hover {
+  background: var(--surface-container-high);
+}
+
+.filterBtn.active {
+  background: var(--surface-container-highest);
+  color: var(--on-surface);
+}
+
+.filterCount {
+  font-size: 0.625rem;
+  opacity: 0.6;
+}
+
+.list {
+  padding: var(--sp-4) var(--sp-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+
+.item {
+  padding: var(--sp-4);
+  border-radius: var(--radius-md);
+  background: var(--surface-container-low);
+  transition: background 0.15s ease;
+}
+
+.item:hover {
+  background: var(--surface-container);
+}
+
+.itemHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  margin-bottom: var(--sp-2);
+}
+
+.itemTitle {
+  margin-bottom: var(--sp-1);
+}

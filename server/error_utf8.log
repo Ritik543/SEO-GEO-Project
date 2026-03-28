@@ -1,0 +1,73 @@
+﻿node : node:internal/modul
+es/cjs/loader:1252
+At line:1 char:1
++ node src/worker.js 2>&1 
+| Out-File -Encoding utf8 
+error_utf8.log
++ ~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo        
+      : NotSpecified: (n  
+  ode:internal/modules/   
+ cjs/loader:1252:Strin    
+g) [], RemoteExceptio    n
+    + FullyQualifiedError 
+   Id : NativeCommandErr  
+  or
+ 
+  throw err;
+  ^
+
+Error: Cannot find module 
+'bull'
+Require stack:
+- C:\Users\ASUS\Desktop\Ge
+o\server\src\config\queue.
+js
+- C:\Users\ASUS\Desktop\Ge
+o\server\src\worker.js
+    at 
+Function._resolveFilename 
+(node:internal/modules/cjs
+/loader:1249:15)
+    at Function._load (nod
+e:internal/modules/cjs/loa
+der:1075:27)
+    at 
+TracingChannel.traceSync (
+node:diagnostics_channel:3
+22:14)
+    at wrapModuleLoad (nod
+e:internal/modules/cjs/loa
+der:219:24)
+    at Module.require (nod
+e:internal/modules/cjs/loa
+der:1340:12)
+    at require (node:inter
+nal/modules/helpers:138:16
+)
+    at Object.<anonymous> 
+(C:\Users\ASUS\Desktop\Geo
+\server\src\config\queue.j
+s:1:15)
+    at Module._compile (no
+de:internal/modules/cjs/lo
+ader:1565:14)
+    at Object..js (node:in
+ternal/modules/cjs/loader:
+1708:10)
+    at Module.load (node:i
+nternal/modules/cjs/loader
+:1318:32) {
+  code: 
+'MODULE_NOT_FOUND',
+  requireStack: [
+    'C:\\Users\\ASUS\\Desk
+top\\Geo\\server\\src\\con
+fig\\queue.js',
+    'C:\\Users\\ASUS\\Desk
+top\\Geo\\server\\src\\wor
+ker.js'
+  ]
+}
+
+Node.js v22.12.0

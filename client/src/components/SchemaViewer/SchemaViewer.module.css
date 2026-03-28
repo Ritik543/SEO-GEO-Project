@@ -1,0 +1,64 @@
+.schemaCard {
+  background: var(--surface-container) !important;
+}
+
+.tabs {
+  display: flex;
+  gap: var(--sp-1);
+  margin-bottom: var(--sp-4);
+}
+
+.tab {
+  padding: var(--sp-2) var(--sp-4);
+  border-radius: var(--radius-full);
+  border: none;
+  background: transparent;
+  color: var(--on-surface-variant);
+  font-family: var(--font-label);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.tab:hover {
+  background: var(--surface-container-high);
+}
+
+.tab.active {
+  background: var(--surface-container-highest);
+  color: var(--on-surface);
+}
+
+.codeWrap {
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.code {
+  background: var(--surface-container-lowest);
+  padding: var(--sp-4);
+  border-radius: var(--radius-md);
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 0.75rem;
+  line-height: 1.6;
+  color: var(--on-surface-variant);
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.codeWrap::-webkit-scrollbar {
+  width: 4px;
+}
+
+.codeWrap::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.codeWrap::-webkit-scrollbar-thumb {
+  background: var(--outline-variant);
+  border-radius: 2px;
+}
