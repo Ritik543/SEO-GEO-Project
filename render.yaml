@@ -11,9 +11,12 @@ services:
       - key: NODE_ENV
         value: production
       - key: MONGODB_URI
-        fromConfig: mongodb
+        sync: false
       - key: REDIS_URL
-        fromConfig: redis
+        fromService:
+          type: redis
+          name: redis
+          property: connectionString
       - key: OPENROUTER_API_KEY
         sync: false
       - key: FREE_MODE
@@ -31,9 +34,12 @@ services:
       - key: NODE_ENV
         value: production
       - key: MONGODB_URI
-        fromConfig: mongodb
+        sync: false
       - key: REDIS_URL
-        fromConfig: redis
+        fromService:
+          type: redis
+          name: redis
+          property: connectionString
       - key: OPENROUTER_API_KEY
         sync: false
       - key: FREE_MODE
@@ -44,10 +50,3 @@ services:
     name: redis
     plan: free
     ipAllowList: [] # Only allow internal access
-
-databases:
-  # 4. MongoDB Database
-  - name: mongodb
-    plan: free
-    type: mongodb
-    databaseName: lumen-audit
