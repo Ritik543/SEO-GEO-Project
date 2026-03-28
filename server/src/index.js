@@ -33,6 +33,14 @@ mongoose
   .connect(process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/lumen-audit')
   .then(() => {
     console.log('✓ MongoDB connected');
+    
+    // In production (Render Free Plan), we don't have a dedicated worker service.
+    // Start the worker in the same memory process as the web service.
+    if (process.env.NODE_ENV === 'production') {
+      console.log('✓ Production mode: Starting integrated background worker...');
+      require('./worker');
+    }
+
     app.listen(PORT, () => {
       console.log(`✓ Lumen Audit API running on port ${PORT}`);
     });

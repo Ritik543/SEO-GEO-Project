@@ -22,30 +22,7 @@ services:
       - key: FREE_MODE
         value: "true"
 
-  # 2. Audit Background Worker
-  - type: worker
-    name: seo-geo-worker
-    env: node
-    plan: free
-    rootDir: server
-    buildCommand: npm install
-    startCommand: npm run worker
-    envVars:
-      - key: NODE_ENV
-        value: production
-      - key: MONGODB_URI
-        sync: false
-      - key: REDIS_URL
-        fromService:
-          type: redis
-          name: redis
-          property: connectionString
-      - key: OPENROUTER_API_KEY
-        sync: false
-      - key: FREE_MODE
-        value: "true"
-
-  # 3. Redis Instance (Required for BullMQ)
+  # 2. Redis Instance (Required for BullMQ)
   - type: redis
     name: redis
     plan: free

@@ -12,13 +12,17 @@ const { createLLMProvider } = require('./services/ai.service');
 const { computeOverallScore } = require('./services/scoring.service');
 
 // ─── MongoDB ────────────────────────────────────────────────
-mongoose
-  .connect(process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/lumen-audit')
-  .then(() => console.log('✓ Worker: MongoDB connected'))
-  .catch((err) => {
-    console.error('✗ Worker: MongoDB error:', err.message);
-    process.exit(1);
-  });
+if (mongoose.connection.readyState === 0) {
+  mongoose
+    .connect(process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/lumen-audit')
+    .then(() => console.log('✓ Worker: MongoDB connected'))
+    .catch((err) => {
+      console.error('✗ Worker: MongoDB error:', err.message);
+      process.exit(1);
+    });
+} else {
+  console.log('✓ Worker: Native MongoDB connection already established by main process');
+}
 
 // ─── Helper: Publish progress via Redis Pub/Sub for SSE ─────
 async function publishProgress(jobId, stage, message, progress) {
