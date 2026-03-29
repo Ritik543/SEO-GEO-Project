@@ -59,6 +59,12 @@ auditQueue.process('audit', 2, async (job) => {
       await Report.findOneAndUpdate({ jobId }, { status: 'analyzing' });
       await updateProgress(jobId, 55, 'Running AI semantic analysis...', 'analyzing');
       const content = extractContent(html);
+      
+      // Explicit Block Detection
+      if (content.title && (content.title.includes('Just a moment') || content.title.includes('Cloudflare'))) {
+        console.warn(`[WARNING] Crawler may be BLOCKED for ${url}. Title: ${content.title}`);
+      }
+
       const schemas = extractSchema(html);
       const compressed = compressHTML(content, schemas);
 
