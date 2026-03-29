@@ -94,7 +94,9 @@ async function callAIWithRetry(prompt, attempts = 2) {
       const data = await res.json();
       const text = data.choices[0]?.message?.content;
       if (!text) throw new Error('Empty AI response from OpenRouter');
-      return JSON.parse(text.replace(/```json|```/g, '').trim());
+      const parsed = JSON.parse(text.replace(/```json|```/g, '').trim());
+      console.log(`[AI] OpenRouter SUCCESS | keys=${Object.keys(parsed).join(',')} | geo_score=${parsed.geo_score} | entity_clarity=${parsed.entity_clarity}`);
+      return parsed;
     } else {
       console.log(`[AI] No OpenRouter API key found. Skipping primary AI.`);
     }
@@ -131,7 +133,9 @@ async function callAIWithRetry(prompt, attempts = 2) {
       const data = await res.json();
       const text = data.choices[0]?.message?.content;
       if (!text) throw new Error('Empty AI response from Mistral');
-      return JSON.parse(text.replace(/```json|```/g, '').trim());
+      const parsed = JSON.parse(text.replace(/```json|```/g, '').trim());
+      console.log(`[AI] Mistral SUCCESS | keys=${Object.keys(parsed).join(',')} | geo_score=${parsed.geo_score} | entity_clarity=${parsed.entity_clarity}`);
+      return parsed;
     } catch (err) {
       console.error(`[AI] Mistral fallback attempt ${i + 1} failed:`, err.message);
       if (i === attempts - 1) throw err;
@@ -156,10 +160,13 @@ const SAFE_FALLBACK_JSON = {
  */
 async function analyzeSemantic(compressedHTML, ruleResults) {
   const prompt = buildPrompt(compressedHTML, ruleResults);
+  console.log(`[AI] analyzeSemantic called | prompt length: ${prompt.length} chars`);
   try {
-    return await callAIWithRetry(prompt);
+    const result = await callAIWithRetry(prompt);
+    console.log(`[AI] analyzeSemantic DONE | result keys: ${Object.keys(result || {}).join(',')}`);
+    return result;
   } catch (err) {
-    console.error('[AI] Fatal Ref Error:', err.message);
+    console.error('[AI] Fatal Error — returning SAFE_FALLBACK:', err.message);
     return SAFE_FALLBACK_JSON;
   }
 }

@@ -40,13 +40,15 @@ auditQueue.process('audit', 2, async (job) => {
       // Step 1: Crawl (10%)
       await Report.findOneAndUpdate({ jobId }, { status: 'crawling' });
       await updateProgress(jobId, 10, 'Fetching page HTML...', 'crawling');
-      const { html, finalUrl } = await crawlPage(url);
+      const { html, finalUrl, statusCode, loadTimeMs } = await crawlPage(url);
+      console.log(`[WORKER] Step 1 DONE: Crawled ${finalUrl || url} | status=${statusCode} | HTML=${html.length} chars | ${loadTimeMs}ms`);
       const $ = cheerio.load(html);
 
       // Step 2: Rule-based checks (25%) — FAST, 100% accurate
       await Report.findOneAndUpdate({ jobId }, { status: 'extracting' });
       await updateProgress(jobId, 25, 'Running technical SEO checks...', 'extracting');
       const ruleResults = runRuleChecks($, finalUrl || url);
+      console.log(`[WORKER] Step 2 DONE: Rule checks | title="${ruleResults.facts.title_text}" | wordCount=${ruleResults.facts.word_count} | issues=${ruleResults.issues.length} | techSEO=${ruleResults.scores.technical_seo} | onPage=${ruleResults.scores.on_page_seo}`);
 
       // Step 3: PageSpeed (40%) — Dual Strategy
       await updateProgress(jobId, 40, 'Fetching Mobile & Desktop performance metrics...', 'extracting');
@@ -59,22 +61,29 @@ auditQueue.process('audit', 2, async (job) => {
       await Report.findOneAndUpdate({ jobId }, { status: 'analyzing' });
       await updateProgress(jobId, 55, 'Running AI semantic analysis...', 'analyzing');
       const content = extractContent(html);
+      console.log(`[WORKER] Step 4a: Content extracted | title="${content.title}" | headings.h1=${content.headings?.h1?.length || 0} | headings.h2=${content.headings?.h2?.length || 0}`);
       
       // Explicit Block Detection
-      if (content.title && (content.title.includes('Just a moment') || content.title.includes('Cloudflare'))) {
-        console.warn(`[WARNING] Crawler may be BLOCKED for ${url}. Title: ${content.title}`);
+      if (content.title && (content.title.includes('Just a moment') || content.title.includes('Cloudflare') || content.title.includes('Attention'))) {
+        console.warn(`[WORKER] ⚠ BLOCKED PAGE DETECTED for ${url}. Title: "${content.title}". AI analysis will be limited.`);
       }
 
       const schemas = extractSchema(html);
+      console.log(`[WORKER] Step 4b: Schema extracted | found ${schemas.length} JSON-LD blocks`);
+      
       const compressed = compressHTML(content, schemas);
+      console.log(`[WORKER] Step 4c: Compressed HTML length: ${compressed.length} chars (sending to AI)`);
 
       const { analyzeSemantic } = require('./services/ai.service');
       const aiResults = await analyzeSemantic(compressed, ruleResults.facts) || {};
+      console.log(`[WORKER] Step 4d: AI Results received | keys=${Object.keys(aiResults).join(',')}`);
+      console.log(`[WORKER] Step 4d: AI Scores | geo_score=${aiResults.geo_score} | entity_clarity=${aiResults.entity_clarity} | topical_authority=${aiResults.topical_authority} | citation_readiness=${aiResults.citation_readiness}`);
 
       // Step 5: Score (90%)
       await Report.findOneAndUpdate({ jobId }, { status: 'scoring' });
       await updateProgress(jobId, 90, 'Calculating final scores...', 'scoring');
       const finalScores = computeScores(ruleResults, cwvMobile, aiResults);
+      console.log(`[WORKER] Step 5 DONE: Final Scores | overall=${finalScores.overall} | techSEO=${finalScores.technical_seo} | onPage=${finalScores.onpage_seo} | schema=${finalScores.schema} | geo=${finalScores.geo}`);
 
       // Step 6: Save to MongoDB (100%)
       const processingTime = Date.now() - startTime;
