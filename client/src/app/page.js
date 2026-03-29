@@ -12,7 +12,7 @@ export default function Home() {
   const [report, setReport] = useState(null);
   const [sseMessages, setSseMessages] = useState([]);
 
-  const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+  const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5005';
 
   const handleStartAudit = async (url) => {
     setAuditState('streaming');
@@ -24,6 +24,7 @@ export default function Home() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ url }),
+        credentials: 'include',
       });
 
       const data = await res.json();
@@ -37,7 +38,9 @@ export default function Home() {
       setJobId(data.jobId);
 
       // Connect SSE
-      const eventSource = new EventSource(`${API_BASE}/api/v1/audits/stream/${data.jobId}`);
+      const eventSource = new EventSource(`${API_BASE}/api/v1/audits/stream/${data.jobId}`, {
+        withCredentials: true
+      });
 
       eventSource.addEventListener('progress', (e) => {
         const parsed = JSON.parse(e.data);
@@ -47,7 +50,9 @@ export default function Home() {
       eventSource.addEventListener('completed', async () => {
         eventSource.close();
         // Fetch the full report
-        const reportRes = await fetch(`${API_BASE}/api/v1/audits/report/${data.jobId}`);
+        const reportRes = await fetch(`${API_BASE}/api/v1/audits/report/${data.jobId}`, {
+          credentials: 'include'
+        });
         const reportData = await reportRes.json();
         setReport(reportData);
         setAuditState('complete');

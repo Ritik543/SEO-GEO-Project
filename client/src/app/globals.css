@@ -103,6 +103,15 @@
     font-weight: 700;
   }
   
+  @media (max-width: 768px) {
+    .text-display-lg {
+      font-size: 2.25rem;
+    }
+    .text-headline-lg {
+      font-size: 1.75rem;
+    }
+  }
+  
   .text-headline-lg {
     font-family: var(--font-display);
     font-size: 2rem;
@@ -293,4 +302,91 @@
   50% {
     opacity: .5;
   }
+}
+
+/* Media Print Overrides for professional PDF Export */
+@media print {
+  nav, .breadcrumb, .action-buttons, .fab, .no-print { 
+    display: none !important; 
+  }
+  
+  body { 
+    background: white !important; 
+    color: #1a1a1a !important;
+    font-size: 14px; 
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  
+  /* Ensure dashboard grid stacks for A4 */
+  .audit-layout, .grid-dashboard { 
+    grid-template-columns: 1fr !important; 
+    display: block !important;
+  }
+  
+  .card { 
+    break-inside: avoid; 
+    margin-bottom: 2rem;
+    border: 1px solid #e2e8f0 !important;
+    box-shadow: none !important;
+  }
+  
+  .chapter-break { 
+    break-before: page; 
+  }
+  
+  /* Clean up all animations/transitions for a static capture */
+  * { 
+    animation: none !important; 
+    transition: none !important; 
+    box-shadow: none !important;
+  }
+
+  /* Force color printing in Puppeteer */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+}
+
+/* Auth Hub Animations */
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-6px); }
+  40%, 80% { transform: translateX(6px); }
+}
+
+.animate-shake {
+  animation: shake 0.4s cubic-bezier(.36,.07,.19,.97) both;
+}
+
+.auth-card {
+  max-width: 400px;
+  margin: 60px auto 0;
+  padding: 32px;
+  border-radius: 16px;
+  border: 0.5px solid rgba(144, 143, 160, 0.2);
+  background: var(--surface-container);
+  box-shadow: 0 12px 40px rgba(0,0,0,0.3);
+}
+
+@media (max-width: 400px) {
+  .auth-card {
+    margin-top: 20px;
+    padding: 24px 16px;
+    border-radius: 12px;
+    border: none;
+    background: transparent;
+    box-shadow: none;
+  }
+}
+
+.success-pulse {
+  animation: success-pulse 0.3s ease-out forwards;
+}
+
+@keyframes success-pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.05); background: #22c55e !important; color: white !important; }
+  100% { transform: scale(1); }
 }

@@ -1,0 +1,224 @@
+.pdfContainer {
+  width: 100%;
+  max-width: 800px; /* Reduced for A4 focus */
+  margin: 0 auto;
+  padding: 40px;
+  background: white;
+  color: #1a1a1a;
+  font-family: 'Inter', sans-serif;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  box-sizing: border-box;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 40px;
+  border-bottom: 2px solid #f0f0f0;
+  padding-bottom: 20px;
+}
+
+.brandGroup {
+  display: flex;
+  flex-direction: column;
+}
+
+.brand {
+  font-size: 2.25rem;
+  font-weight: 800;
+  color: #0b1326;
+  margin: 0;
+  letter-spacing: -1px;
+}
+
+.tagline {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  color: #666;
+  letter-spacing: 2px;
+  font-weight: 700;
+  margin-top: 4px;
+}
+
+.meta {
+  text-align: right;
+  font-size: 0.8125rem;
+  color: #666;
+  line-height: 1.5;
+}
+
+.sectionTitle {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: #0b1326;
+  border-left: 4px solid #00c853;
+  padding-left: 12px;
+  margin: 32px 0 16px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.scoreGrid {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  background: #f8fafc;
+  padding: 24px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+}
+
+.scoreItem {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+}
+
+.scoreLabel {
+  font-size: 0.625rem;
+  font-weight: 800;
+  color: #64748b;
+  margin-bottom: 8px;
+}
+
+.scoreValue {
+  font-size: 1.75rem;
+  font-weight: 800;
+}
+
+.geoBox {
+  background: #0b1326;
+  color: white;
+  padding: 24px;
+  border-radius: 12px;
+}
+
+.geoGrid {
+  display: flex;
+  justify-content: space-around;
+  margin-bottom: 24px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  padding-bottom: 16px;
+}
+
+.geoStat {
+  font-size: 0.8125rem;
+}
+
+.geoStat span {
+  opacity: 0.6;
+}
+
+.geoSummary {
+  font-size: 0.875rem;
+  line-height: 1.6;
+}
+
+.geoSummary h3 {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 12px;
+  color: #00c853;
+}
+
+.perfTable {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.perfItem {
+  padding: 16px;
+  background: #f8fafc;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+  font-size: 0.8125rem;
+}
+
+.issueItem {
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.issueHeader {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.severity {
+  font-size: 0.625rem;
+  font-weight: 800;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.critical { background: #fee2e2; color: #ef4444; }
+.warning { background: #fef9c3; color: #ca8a04; }
+.info { background: #e0f2fe; color: #0ea5e9; }
+
+.issueCategory {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: capitalize;
+}
+
+.issueTitle {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #1a1a1a;
+  margin: 0;
+}
+
+.issueDesc {
+  font-size: 0.875rem;
+  color: #4b5563;
+  line-height: 1.5;
+  margin-top: 8px;
+}
+
+.fixBox {
+  margin-top: 12px;
+  padding: 12px;
+  background: #f8fafc;
+  border-radius: 6px;
+  border-left: 3px solid #00c853;
+  font-size: 0.8125rem;
+}
+
+.code {
+  display: block;
+  margin-top: 8px;
+  font-family: monospace;
+  background: #f1f5f9;
+  padding: 8px;
+  color: #1e293b;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.schemaCode {
+  background: #1e293b;
+  color: #22c55e;
+  padding: 16px;
+  border-radius: 8px;
+  font-size: 0.75rem;
+  overflow: auto;
+}
+
+.footer {
+  margin-top: 60px;
+  padding-top: 20px;
+  border-top: 1px solid #f0f0f0;
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.6875rem;
+  color: #999;
+}

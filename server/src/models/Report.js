@@ -5,6 +5,8 @@ const issueSchema = new mongoose.Schema({
   severity: { type: String, enum: ['critical', 'warning', 'info'], required: true },
   title: { type: String, required: true },
   description: String,
+  current_code: String,
+  suggested_code: String,
 });
 
 const recommendationSchema = new mongoose.Schema({
@@ -26,6 +28,7 @@ const scoreSchema = new mongoose.Schema({
 
 const reportSchema = new mongoose.Schema(
   {
+    userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true },
     jobId: { type: String, required: true, unique: true, index: true },
     url: { type: String, required: true },
     status: {
@@ -47,8 +50,21 @@ const reportSchema = new mongoose.Schema(
     scores: scoreSchema,
     issues: [issueSchema],
     recommendations: [recommendationSchema],
-    suggestedSchema: { type: mongoose.Schema.Types.Mixed }, // JSON-LD
     geoInsights: { type: mongoose.Schema.Types.Mixed },
+    performance: {
+      mobile: {
+        score: { type: Number, default: 0 },
+        lcp: { value: Number, rating: String },
+        fid: { value: Number, rating: String },
+        cls: { value: Number, rating: String },
+      },
+      desktop: {
+        score: { type: Number, default: 0 },
+        lcp: { value: Number, rating: String },
+        fid: { value: Number, rating: String },
+        cls: { value: Number, rating: String },
+      },
+    },
     
     rawExtraction: {
       title: String,
@@ -58,6 +74,8 @@ const reportSchema = new mongoose.Schema(
       existingSchema: mongoose.Schema.Types.Mixed,
     },
     processingTime: Number, // milliseconds
+    completedAt: Date,
+    pdfUrl: String,
     error: String,
   },
   { timestamps: true }

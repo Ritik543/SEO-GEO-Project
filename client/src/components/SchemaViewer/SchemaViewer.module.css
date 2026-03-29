@@ -1,64 +1,83 @@
-.schemaCard {
-  background: var(--surface-container) !important;
+.container {
+  padding: var(--sp-6) !important;
+  background: var(--surface-container-low);
+  overflow: hidden;
 }
 
-.tabs {
+.header {
   display: flex;
-  gap: var(--sp-1);
+  justify-content: space-between;
+  align-items: center;
   margin-bottom: var(--sp-4);
 }
 
-.tab {
+.copyBtn {
   padding: var(--sp-2) var(--sp-4);
-  border-radius: var(--radius-full);
-  border: none;
-  background: transparent;
+  background: var(--surface-container-highest);
   color: var(--on-surface-variant);
-  font-family: var(--font-label);
+  border: 1px solid var(--outline-variant);
+  border-radius: var(--radius-md);
   font-size: 0.75rem;
   font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: all 0.2s ease;
 }
 
-.tab:hover {
-  background: var(--surface-container-high);
-}
-
-.tab.active {
-  background: var(--surface-container-highest);
+.copyBtn:hover {
+  background: var(--surface-bright);
   color: var(--on-surface);
 }
 
+.viewBtn {
+  padding: var(--sp-1) var(--sp-3);
+  border-radius: var(--radius-full);
+  border: 1px solid var(--outline-variant);
+  background: transparent;
+  color: var(--on-surface-variant);
+  font-size: 0.625rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.viewBtn:hover:not(:disabled) {
+  background: var(--surface-container-high);
+}
+
+.viewBtn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.viewBtn.active {
+  background: var(--primary);
+  color: var(--on-primary);
+  border-color: var(--primary);
+}
+
+.copyBtn.copied {
+  background: var(--secondary);
+  color: var(--on-secondary);
+  border-color: var(--secondary);
+}
+
 .codeWrap {
+  background: var(--surface-container-lowest);
+  padding: var(--sp-4);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--outline-variant);
   max-height: 400px;
   overflow-y: auto;
 }
 
-.code {
-  background: var(--surface-container-lowest);
-  padding: var(--sp-4);
-  border-radius: var(--radius-md);
-  font-family: 'SF Mono', 'Fira Code', monospace;
-  font-size: 0.75rem;
-  line-height: 1.6;
-  color: var(--on-surface-variant);
-  overflow-x: auto;
+.pre {
+  margin: 0;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--secondary);
   white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.codeWrap::-webkit-scrollbar {
-  width: 4px;
-}
-
-.codeWrap::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.codeWrap::-webkit-scrollbar-thumb {
-  background: var(--outline-variant);
-  border-radius: 2px;
+  word-break: break-all;
 }

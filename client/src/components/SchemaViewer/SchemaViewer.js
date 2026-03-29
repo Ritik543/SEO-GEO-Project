@@ -1,69 +1,65 @@
 'use client';
-
-import { useState } from 'react';
+import React, { useState } from 'react';
 import styles from './SchemaViewer.module.css';
 
 export default function SchemaViewer({ existingSchema, suggestedSchema }) {
-  const [tab, setTab] = useState('suggested');
+  const [view, setView] = React.useState('suggested'); // 'existing' or 'suggested'
+  const [copied, setCopied] = React.useState(false);
+
+  if (!suggestedSchema && !existingSchema) return null;
+
+  const currentSchema = view === 'suggested' ? suggestedSchema : existingSchema;
+  const jsonString = JSON.stringify(currentSchema, null, 2);
+
+  const copyToClipboard = () => {
+    navigator.clipboard.writeText(jsonString);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   return (
-    <div className={`card ${styles.schemaCard}`}>
-      <h2 className="text-headline-sm" style={{ marginBottom: 'var(--sp-4)' }}>Structured Data</h2>
-
-      <div className={styles.tabs}>
-        <button
-          className={`${styles.tab} ${tab === 'suggested' ? styles.active : ''}`}
-          onClick={() => setTab('suggested')}
+    <div className={`card ${styles.container}`}>
+      <div className={styles.header}>
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center gap-2">
+            <span className="material-symbols-outlined text-primary">data_object</span>
+            <h2 className="text-headline-sm">Structured Data</h2>
+          </div>
+          <div className="flex gap-2">
+            <button 
+              onClick={() => setView('existing')}
+              className={`${styles.viewBtn} ${view === 'existing' ? styles.active : ''}`}
+              disabled={!existingSchema}
+            >
+              Current
+            </button>
+            <button 
+              onClick={() => setView('suggested')}
+              className={`${styles.viewBtn} ${view === 'suggested' ? styles.active : ''}`}
+            >
+              AI Optimized
+            </button>
+          </div>
+        </div>
+        <button 
+          onClick={copyToClipboard}
+          className={`${styles.copyBtn} ${copied ? styles.copied : ''}`}
         >
-          Suggested Schema
-        </button>
-        <button
-          className={`${styles.tab} ${tab === 'existing' ? styles.active : ''}`}
-          onClick={() => setTab('existing')}
-        >
-          Existing ({existingSchema?.length || 0})
+          {copied ? 'Copied!' : 'Copy'}
         </button>
       </div>
+      
+      <p className="text-body-sm text-muted mb-4 italic">
+        {view === 'suggested' 
+          ? 'AI-optimized JSON-LD with enhanced entity triples for maximum GEO visibility.' 
+          : 'Original structured data detected on your page.'}
+      </p>
 
       <div className={styles.codeWrap}>
-        {tab === 'suggested' && (
-          suggestedSchema ? (
-            <pre className={styles.code}>
-              {JSON.stringify(suggestedSchema, null, 2)}
-            </pre>
-          ) : (
-            <p className="text-body-md text-muted" style={{ padding: 'var(--sp-4)' }}>
-              No schema suggestion available.
-            </p>
-          )
-        )}
-
-        {tab === 'existing' && (
-          existingSchema?.length > 0 ? (
-            existingSchema.map((schema, i) => (
-              <pre key={i} className={styles.code} style={{ marginBottom: 'var(--sp-3)' }}>
-                {JSON.stringify(schema, null, 2)}
-              </pre>
-            ))
-          ) : (
-            <p className="text-body-md text-muted" style={{ padding: 'var(--sp-4)' }}>
-              No existing JSON-LD found on this page.
-            </p>
-          )
-        )}
+        <pre className={styles.pre}>
+          <code>{jsonString}</code>
+        </pre>
       </div>
-
-      {tab === 'suggested' && suggestedSchema && (
-        <button
-          className="btn btn-secondary"
-          style={{ marginTop: 'var(--sp-4)', width: '100%' }}
-          onClick={() => {
-            navigator.clipboard.writeText(JSON.stringify(suggestedSchema, null, 2));
-          }}
-        >
-          Copy Schema
-        </button>
-      )}
     </div>
   );
 }

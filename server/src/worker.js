@@ -4,12 +4,15 @@ const { connection } = require('./config/redis');
 const mongoose = require('mongoose');
 const Report = require('./models/Report');
 
+const cheerio = require('cheerio');
 const { crawlPage } = require('./services/crawler.service');
 const { extractContent } = require('./services/content.service');
-const { extractSchema, validateSchema } = require('./services/schema.service');
-const { compressForAI } = require('./services/compressor.service');
-const { createLLMProvider } = require('./services/ai.service');
-const { computeOverallScore } = require('./services/scoring.service');
+const { extractSchema } = require('./services/schema.service');
+const { compressHTML } = require('./services/compressor.service');
+const { callAIWithRetry, buildPrompt } = require('./services/ai.service');
+const { runRuleChecks } = require('./services/rules.service');
+const { getPageSpeedData } = require('./services/pagespeed.service');
+const { computeScores } = require('./services/scoring.service');
 
 // ─── MongoDB ────────────────────────────────────────────────
 if (mongoose.connection.readyState === 0) {
@@ -20,12 +23,10 @@ if (mongoose.connection.readyState === 0) {
       console.error('✗ Worker: MongoDB error:', err.message);
       process.exit(1);
     });
-} else {
-  console.log('✓ Worker: Native MongoDB connection already established by main process');
 }
 
 // ─── Helper: Publish progress via Redis Pub/Sub for SSE ─────
-async function publishProgress(jobId, stage, message, progress) {
+async function updateProgress(jobId, progress, message, stage = 'processing') {
   const payload = JSON.stringify({ stage, message, progress, timestamp: Date.now() });
   await connection.publish(`audit:${jobId}`, payload);
 }
@@ -36,117 +37,106 @@ auditQueue.process('audit', 2, async (job) => {
     const startTime = Date.now();
 
     try {
-      // 1. Update status: crawling
+      // Step 1: Crawl (10%)
       await Report.findOneAndUpdate({ jobId }, { status: 'crawling' });
-      await publishProgress(jobId, 'crawling', `Launching headless browser for ${url}...`, 10);
+      await updateProgress(jobId, 10, 'Fetching page HTML...', 'crawling');
+      const { html, finalUrl } = await crawlPage(url);
+      const $ = cheerio.load(html);
 
-      const { html, statusCode, loadTimeMs, finalUrl } = await crawlPage(url);
-      await publishProgress(jobId, 'crawling', `Page fetched (${statusCode}) in ${loadTimeMs}ms. Extracting content...`, 25);
-
-      // 2. Extract content
+      // Step 2: Rule-based checks (25%) — FAST, 100% accurate
       await Report.findOneAndUpdate({ jobId }, { status: 'extracting' });
-      await publishProgress(jobId, 'extracting', 'Parsing DOM, headings, meta tags, and links...', 35);
+      await updateProgress(jobId, 25, 'Running technical SEO checks...', 'extracting');
+      const ruleResults = runRuleChecks($, finalUrl || url);
 
+      // Step 3: PageSpeed (40%) — Dual Strategy
+      await updateProgress(jobId, 40, 'Fetching Mobile & Desktop performance metrics...', 'extracting');
+      const [cwvMobile, cwvDesktop] = await Promise.all([
+        getPageSpeedData(finalUrl || url, 'mobile'),
+        getPageSpeedData(finalUrl || url, 'desktop')
+      ]);
+
+      // Step 4: Compress + AI (70%) — GEO + semantic analysis only
+      await Report.findOneAndUpdate({ jobId }, { status: 'analyzing' });
+      await updateProgress(jobId, 55, 'Running AI semantic analysis...', 'analyzing');
       const content = extractContent(html);
       const schemas = extractSchema(html);
-      const schemaValidation = validateSchema(schemas);
+      const compressed = compressHTML(content, schemas);
 
-      await publishProgress(jobId, 'extracting', `Extracted ${content.wordCount} words, ${content.images.total} images, ${schemas.length} schema blocks.`, 45);
+      const aiResults = await callAIWithRetry(buildPrompt(compressed, ruleResults.facts));
 
-      // 3. Compress and send to AI
-      await Report.findOneAndUpdate({ jobId }, { status: 'analyzing' });
-      await publishProgress(jobId, 'analyzing', 'Compressing data and sending to AI for analysis...', 55);
-
-      const compressedPayload = compressForAI(content, schemas);
-
-      // Log extracted data to console
-      console.log('\n' + '='.repeat(60));
-      console.log('EXTRACTED PAYLOAD (first 2000 chars):');
-      console.log('='.repeat(60));
-      console.log(compressedPayload.slice(0, 2000));
-      console.log('='.repeat(60) + '\n');
-
-      let aiResult;
-      if (process.env.MOCK_AI === 'true') {
-        console.log('[MOCK_AI] Skipping AI Provider, using mock response');
-        aiResult = {
-          scores: { technical_seo: 72, onpage_seo: 65, schema: 55, geo: 60 },
-          issues: [
-            { category: 'technical_seo', severity: 'warning', title: 'Missing canonical tag', description: 'No canonical URL defined, risking duplicate content penalties.' },
-            { category: 'onpage_seo', severity: 'critical', title: 'Thin meta description', description: 'Meta description is too short or missing.' },
-            { category: 'schema', severity: 'warning', title: 'No FAQ schema', description: 'FAQ structured data missing, reducing rich result eligibility.' },
-            { category: 'geo', severity: 'info', title: 'Low entity clarity', description: 'Brand entities are not consistently named across the page.' },
-          ],
-          recommendations: [
-            { category: 'technical_seo', priority: 'high', problem: 'No canonical tag', why: 'Avoids duplicate content penalties', fix: 'Add <link rel="canonical"> in head', example: '<link rel="canonical" href="https://example.com/page">' },
-            { category: 'onpage_seo', priority: 'high', problem: 'Short meta description', why: 'Improves CTR in search results', fix: 'Write a 130-160 char meta description', example: '<meta name="description" content="Your compelling description here.">' },
-            { category: 'geo', priority: 'medium', problem: 'Brand entities unclear', why: 'AI models need clear entity signals to cite your brand', fix: 'Consistently use exact brand name and add Organization schema', example: '{"@type":"Organization","name":"YourBrand"}' },
-          ],
-          suggestedSchema: { '@context': 'https://schema.org', '@type': 'WebPage', 'name': content.title, 'description': content.metaDescription },
-          geoInsights: { entityClarity: 60, topicalAuthority: 65, citationReadiness: 55, summary: 'Page has moderate GEO signals. Adding structured data and clearer entity references would improve AI citation potential.', entities: ['Brand', 'Product', 'Service'], improvements: ['Add Organization schema', 'Define clear topical clusters', 'Include author attribution'] },
-        };
-      } else {
-        const llm = createLLMProvider();
-        aiResult = await llm.analyze(compressedPayload);
-      }
-
-      await publishProgress(jobId, 'analyzing', 'AI analysis complete. Computing scores...', 80);
-
-      // 4. Score
+      // Step 5: Score (90%)
       await Report.findOneAndUpdate({ jobId }, { status: 'scoring' });
-      await publishProgress(jobId, 'scoring', 'Compiling final audit report...', 90);
+      await updateProgress(jobId, 90, 'Calculating final scores...', 'scoring');
+      const finalScores = computeScores(ruleResults, cwvMobile, aiResults);
 
-      const scores = computeOverallScore(aiResult.scores || {});
-
-      // 5. Save completed report
+      // Step 6: Save to MongoDB (100%)
       const processingTime = Date.now() - startTime;
+      const reportPayload = {
+        url: finalUrl || url,
+        status: 'completed',
+        scores: finalScores,
+        issues: [...ruleResults.issues, ...(aiResults.issues || [])].map(i => ({
+          ...i,
+          category: i.category.toLowerCase()
+        })),
+        geoInsights: {
+          entityClarity: aiResults.entity_clarity,
+          topicalAuthority: aiResults.topical_authority,
+          citationReadiness: aiResults.citation_readiness,
+          detected_entities: aiResults.detected_entities,
+          ai_summary: aiResults.ai_summary,
+        },
+        improvedSchema: (() => {
+          let schema = aiResults.schema_suggestion;
+          if (typeof schema === 'string') {
+            try {
+              // Handle AI double-stringification or literal escaping
+              const cleaned = schema.replace(/\\"/g, '"').replace(/^"/, '').replace(/"$/, '');
+              return JSON.parse(cleaned);
+            } catch (e) {
+              console.warn('AI Schema parsing failed, returning raw string.');
+              return schema;
+            }
+          }
+          return schema;
+        })(),
+        performance: {
+          mobile: cwvMobile ? {
+            score: cwvMobile.performance_score,
+            lcp: { value: cwvMobile.lcp_ms, rating: cwvMobile.lcp_rating },
+            fid: { value: cwvMobile.fid_ms, rating: cwvMobile.fid_rating },
+            cls: { value: cwvMobile.cls_score, rating: cwvMobile.cls_rating },
+          } : undefined,
+          desktop: cwvDesktop ? {
+            score: cwvDesktop.performance_score,
+            lcp: { value: cwvDesktop.lcp_ms, rating: cwvDesktop.lcp_rating },
+            fid: { value: cwvDesktop.fid_ms, rating: cwvDesktop.fid_rating },
+            cls: { value: cwvDesktop.cls_score, rating: cwvDesktop.cls_rating },
+          } : undefined,
+        },
+        rawExtraction: {
+          title: ruleResults.facts.title_text,
+          metaDescription: ruleResults.facts.meta_description,
+          headings: content.headings,
+          wordCount: ruleResults.facts.word_count,
+          existingSchema: schemas,
+        },
+        processingTime,
+        completedAt: new Date(),
+      };
 
-      await Report.findOneAndUpdate(
-        { jobId },
-        {
-          status: 'completed',
-          url: finalUrl || url,
-          pageType: aiResult.pageType || 'WebPage',
-          entities: aiResult.entities || {},
-          improvedSchema: aiResult.improvedSchema || aiResult.suggestedSchema || null,
-          
-          // Legacy fields mapping
-          scores: computeOverallScore(aiResult.scores || {}),
-          issues: aiResult.issues || [],
-          recommendations: aiResult.recommendations || [],
-          geoInsights: aiResult.geoInsights || null,
-          
-          rawExtraction: {
-            title: content.title,
-            metaDescription: content.metaDescription,
-            headings: content.headings,
-            wordCount: content.wordCount,
-            existingSchema: schemas,
-          },
-          processingTime,
-        }
-      );
-
-      await publishProgress(jobId, 'completed', `Audit complete in ${(processingTime / 1000).toFixed(1)}s.`, 100);
+      await Report.findOneAndUpdate({ jobId }, reportPayload);
+      await updateProgress(jobId, 100, 'completed', 'completed');
 
       return { reportId: jobId };
     } catch (err) {
       console.error(`Worker error for job ${jobId}:`, err.message);
-
-      // Check if this is the final attempt
       const isFinalAttempt = job.attemptsMade >= (job.opts.attempts - 1) || job.opts.attempts <= 1;
 
       if (isFinalAttempt) {
-        await Report.findOneAndUpdate(
-          { jobId },
-          { status: 'failed', error: err.message }
-        );
-        await publishProgress(jobId, 'failed', `Audit failed definitively: ${err.message}`, 0);
-      } else {
-        // Just a transient error (e.g. Rate Limit 429), let Bull retry
-        await publishProgress(jobId, 'extracting', `Rate limited or transient error. Retrying... (${err.message.substring(0, 30)}...)`, 25);
+        await Report.findOneAndUpdate({ jobId }, { status: 'failed', error: err.message });
+        await updateProgress(jobId, 0, `Audit failed: ${err.message}`, 'failed');
       }
-
       throw err;
     }
   }

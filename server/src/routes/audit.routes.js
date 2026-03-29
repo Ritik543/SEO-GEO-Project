@@ -26,8 +26,13 @@ router.post('/', async (req, res) => {
 
     const jobId = uuidv4();
 
-    // Create a pending report in MongoDB
-    await Report.create({ jobId, url, status: 'pending' });
+    // Create a pending report in MongoDB (linked to user)
+    await Report.create({ 
+      jobId, 
+      url, 
+      status: 'pending',
+      userId: req.userId 
+    });
 
     // Enqueue the job for the worker
     await auditQueue.add('audit', { url, jobId }, {
@@ -54,10 +59,10 @@ router.post('/', async (req, res) => {
 router.get('/stream/:jobId', async (req, res) => {
   const { jobId } = req.params;
 
-  // Check if report exists
-  const report = await Report.findOne({ jobId });
+  // Check if report exists AND belongs to the user
+  const report = await Report.findOne({ jobId, userId: req.userId });
   if (!report) {
-    return res.status(404).json({ error: 'Audit not found.' });
+    return res.status(404).json({ error: 'Audit not found or access denied.' });
   }
 
   // If already completed, send the result immediately
@@ -133,10 +138,13 @@ router.get('/stream/:jobId', async (req, res) => {
 // ═══════════════════════════════════════════════════════════
 router.get('/report/:reportId', async (req, res) => {
   try {
-    const report = await Report.findOne({ jobId: req.params.reportId });
+    const report = await Report.findOne({ 
+      jobId: req.params.reportId,
+      userId: req.userId 
+    });
 
     if (!report) {
-      return res.status(404).json({ error: 'Report not found.' });
+      return res.status(404).json({ error: 'Report not found or access denied.' });
     }
 
     return res.json(report);
@@ -147,19 +155,35 @@ router.get('/report/:reportId', async (req, res) => {
 });
 
 // ═══════════════════════════════════════════════════════════
-// GET /api/v1/audits/history — List recent audits
+// POST /api/v1/audits/report/:id/pdf — PDF generation
 // ═══════════════════════════════════════════════════════════
-router.get('/history', async (req, res) => {
-  try {
-    const reports = await Report.find()
-      .sort({ createdAt: -1 })
-      .limit(20)
-      .select('jobId url status scores.overall createdAt processingTime');
+const { generatePDF } = require('../services/pdf.service');
 
-    return res.json(reports);
-  } catch (err) {
-    console.error('GET /history error:', err.message);
-    return res.status(500).json({ error: 'Failed to fetch history.' });
+router.post('/report/:id/pdf', async (req, res) => {
+  try {
+    const report = await Report.findOne({
+      jobId: req.params.id,
+      userId: req.userId  // Auth check
+    });
+    
+    if (!report) return res.status(404).json({ error: 'Report not found or access denied.' });
+    if (report.status !== 'completed') return res.status(400).json({ error: 'Report not ready yet.' });
+
+    const buffer = await generatePDF(req.params.id);
+    const filename = `audit-${report.url
+      .replace(/https?:\/\//, '')
+      .replace(/[^a-z0-9]/gi, '-')
+      .substring(0, 40)}.pdf`;
+
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Content-Length': buffer.length
+    });
+    res.send(buffer);
+  } catch (e) {
+    console.error('PDF generation failed:', e);
+    res.status(500).json({ error: 'PDF generation failed. Try again.' });
   }
 });
 

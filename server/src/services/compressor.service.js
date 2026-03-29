@@ -5,7 +5,7 @@
  * @param {object[]} schemas - Extracted JSON-LD from schema.service.
  * @returns {string} A compressed, structured text prompt payload.
  */
-function compressForAI(content, schemas) {
+function compressHTML(content, schemas) {
   const sections = [];
 
   sections.push(`URL AUDIT DATA`);
@@ -54,4 +54,4 @@ function compressForAI(content, schemas) {
   return sections.join('\n');
 }
 
-module.exports = { compressForAI };
+module.exports = { compressHTML };

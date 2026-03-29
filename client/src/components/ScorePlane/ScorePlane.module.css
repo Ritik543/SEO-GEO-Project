@@ -27,10 +27,27 @@
   .plane {
     flex-direction: column;
     padding: var(--sp-6) !important;
+    gap: var(--sp-6);
+  }
+
+  .overall {
+    transform: scale(0.9);
   }
 
   .categories {
     flex-wrap: wrap;
     justify-content: center;
+    gap: var(--sp-8) var(--sp-4);
+  }
+  
+  .ringWrap {
+    width: 45%;
+    min-width: 140px;
+  }
+}
+
+@media (max-width: 480px) {
+  .ringWrap {
+    width: 100%;
   }
 }

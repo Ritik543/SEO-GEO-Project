@@ -1,30 +1,45 @@
 /**
- * Compiles individual category scores from the AI response into an overall score.
- * Weights reflect real-world SEO audit priorities.
- * @param {object} aiScores - { technical_seo, onpage_seo, schema, geo }
- * @returns {object} Scores with computed overall.
+ * Main scoring interface for worker.js.
+ * Technical SEO: 60% from rules, 40% from Core Web Vitals (PageSpeed)
+ * On-Page SEO: 100% from rule-based checks
+ * Schema: Evaluated by AI based on context
+ * GEO: Weighted average of AI sub-scores (Entity, Topical, Citation)
+ * Overall: Weighted composite of the above
  */
-function computeOverallScore(aiScores) {
-  const weights = {
-    technical_seo: 0.30,
-    onpage_seo: 0.30,
-    schema: 0.20,
-    geo: 0.20,
-  };
-
-  const overall = Math.round(
-    (aiScores.technical_seo || 0) * weights.technical_seo +
-    (aiScores.onpage_seo || 0) * weights.onpage_seo +
-    (aiScores.schema || 0) * weights.schema +
-    (aiScores.geo || 0) * weights.geo
+function computeScores(ruleResults, cwvData, aiResults) {
+  // Technical SEO: 60% from rules, 40% from Core Web Vitals
+  const cwvScore = cwvData ? cwvData.performance_score : 50;
+  const technicalSEO = Math.round(
+    (ruleResults.scores.technical_seo * 0.6) + (cwvScore * 0.4)
   );
 
-  return {
-    technical_seo: aiScores.technical_seo || 0,
-    onpage_seo: aiScores.onpage_seo || 0,
-    schema: aiScores.schema || 0,
-    geo: aiScores.geo || 0,
-    overall: Math.min(100, Math.max(0, overall)),
+  // On-Page SEO: purely from rule-based checks
+  const onPageSEO = ruleResults.scores.on_page_seo;
+
+  // Schema: from AI (it reads and evaluates structured data context)
+  const schema = Math.min(100, Math.max(0, aiResults.geo_score || 50));
+
+  // GEO: weighted average of AI's sub-scores
+  const geo = Math.round(
+    (aiResults.entity_clarity * 0.35) +
+    (aiResults.topical_authority * 0.35) +
+    (aiResults.citation_readiness * 0.30)
+  );
+
+  // Overall: weighted composite
+  const overall = Math.round(
+    (technicalSEO * 0.25) +
+    (onPageSEO * 0.25) +
+    (schema * 0.20) +
+    (geo * 0.30)
+  );
+
+  return { 
+    overall, 
+    technical_seo: technicalSEO, 
+    onpage_seo: onPageSEO, // Maintain consistent naming for Frontend
+    schema, 
+    geo 
   };
 }
 
@@ -40,4 +55,4 @@ function scoreToGrade(score) {
   return 'F';
 }
 
-module.exports = { computeOverallScore, scoreToGrade };
+module.exports = { computeScores, scoreToGrade };

@@ -1,237 +1,167 @@
-const { GoogleGenerativeAI } = require('@google/generative-ai');
-
-// ═══════════════════════════════════════════════════════════
-// Strict Free Mode Configuration
-// ═══════════════════════════════════════════════════════════
-
-const ALLOWED_FREE_MODELS = [
-  'google/gemma-3-27b-it:free',
-  'google/gemma-3-12b-it:free',
-  'meta-llama/llama-3.2-3b-instruct:free',
-  'meta-llama/llama-3.3-70b-instruct:free',
-  'nousresearch/hermes-3-llama-3.1-405b:free',
-  'openrouter/auto', // Auto is allowed but will attempt to be free
-];
-
-const BLOCKED_PROVIDERS = ['google/', 'openai/', 'anthropic/', 'cohere/', 'anthropic/'];
+/**
+ * AI Service for SEO & GEO Analysis.
+ * Focused on semantic understanding, entity clarity, and GEO citation readiness.
+ */
 
 /**
- * Validates that a model ID is strictly free and not from a paid provider.
- * OpenRouter uses the ':free' suffix for its 100% free tier.
+ * Builds the AI prompt with deterministic rule results.
+ * @param {string} compressedHTML - The cleaned HTML content.
+ * @param {object} ruleResults - Facts from Cheerio analysis.
  */
-function validateFreeModel(modelId) {
-  if (process.env.FREE_MODE !== 'true') return;
+const buildPrompt = (compressedHTML, ruleResults) => `
+You are a world-class SEO and GEO (Generative Engine Optimization) analyst.
 
-  // OpenRouter's :free suffix is the most reliable "Free Forever" indicator
-  const isExplicitlyFree = modelId.toLowerCase().endsWith(':free');
-  
-  // Extra security: still block known paid prefixes if they DON'T have the :free suffix
-  const isPaidProvider = BLOCKED_PROVIDERS.some(p => modelId.toLowerCase().startsWith(p)) && !isExplicitlyFree;
+I have already run rule-based technical checks on this page. Here are the confirmed facts:
+${JSON.stringify(ruleResults, null, 2)}
 
-  if (isPaidProvider || (!isExplicitlyFree && !ALLOWED_FREE_MODELS.includes(modelId))) {
-    throw new Error(`[SECURITY] MODEL BLOCKED: ${modelId} is a paid or non-whitelisted model. Billing prevention active.`);
-  }
-}
+Your job is ONLY to analyze the semantic and GEO quality of this page's content.
+Do NOT re-evaluate or override the technical facts above.
 
-const SAFE_FALLBACK_JSON = {
-  pageType: "WebPage",
-  entities: {
-    who: ["Unknown Brand"],
-    what: ["Content Services"],
-    how: ["Direct Search"],
-    result: ["General Information"]
-  },
-  issues: [
-    { category: "technical_seo", severity: "info", title: "AI analysis unavailable", description: "The AI service returned an empty state. Page was crawled but not fully analyzed." }
-  ],
-  recommendations: [
-    { category: "technical_seo", priority: "low", problem: "Analysis incomplete", why: "Ensures some report data is still visible", fix: "Verify AI provider availability", example: "" }
-  ],
-  improvedSchema: {}
-};
+Analyze the following compressed HTML for:
+1. ENTITY CLARITY: Are brand entities (company name, people, products) clearly defined
+   so that AI engines like ChatGPT and Perplexity can identify and cite them?
+2. TOPICAL AUTHORITY: Does the content demonstrate deep expertise on one clear topic,
+   or is it vague and scattered?
+3. CITATION READINESS: Would an AI assistant cite this page as a source? Are there
+   specific facts, statistics, named authors, or quotable claims?
+4. CONTENT QUALITY: Is the writing clear, structured, and free of keyword stuffing?
+5. SCHEMA GAPS: What structured data is missing that would help AI engines understand
+   this content?
 
-// ═══════════════════════════════════════════════════════════
-// LLM Provider Interface & Implementations
-// ═══════════════════════════════════════════════════════════
+For each issue found, you MUST provide:
+- The exact broken element (current_code)
+- The exact fixed version (suggested_code)
 
-class BaseLLMProvider {
-  constructor(name) {
-    this.name = name;
-  }
-  async analyze(compressedPayload) {
-    throw new Error(`analyze() not implemented for provider: ${this.name}`);
-  }
-}
-
-/**
- * Google Gemini Provider (Legacy / Optional).
- */
-class GeminiProvider extends BaseLLMProvider {
-  constructor(apiKey) {
-    super('gemini');
-    if (process.env.FREE_MODE === 'true') {
-      throw new Error('GeminiProvider (Direct SDK) is blocked in FREE_MODE.');
-    }
-    this.genAI = new GoogleGenerativeAI(apiKey);
-    this.modelName = process.env.GEMINI_MODEL || 'gemini-2.0-flash';
-  }
-
-  async analyze(compressedPayload) {
-    const prompt = buildSEOGEOPrompt(compressedPayload);
-    this.model = this.genAI.getGenerativeModel({ model: this.modelName });
-    const result = await this.model.generateContent(prompt);
-    const text = result.response.text();
-    return parseAIResponse(text);
-  }
-}
-
-/**
- * OpenRouter Provider (Strict Free Mode with Fallback).
- */
-class OpenRouterProvider extends BaseLLMProvider {
-  constructor(apiKey) {
-    super('openrouter');
-    this.apiKey = apiKey;
-    this.models = [
-      process.env.OPENROUTER_PRIMARY_MODEL || 'mistralai/mistral-7b-instruct:free',
-      process.env.OPENROUTER_FALLBACK_MODEL || 'meta-llama/llama-3.1-8b-instruct:free'
-    ];
-  }
-
-  async analyze(compressedPayload) {
-    const prompt = buildSEOGEOPrompt(compressedPayload);
-    let lastError = null;
-
-    for (const modelId of this.models) {
-      try {
-        validateFreeModel(modelId);
-        console.log(`[AI] Free Mode: Attempting model ${modelId}`);
-
-        const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${this.apiKey}`,
-            'HTTP-Referer': process.env.CLIENT_URL || 'http://localhost:3000',
-            'X-Title': 'Lumen Audit',
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            model: modelId,
-            messages: [{ role: 'user', content: prompt }],
-            max_tokens: parseInt(process.env.MAX_TOKENS || '1500'),
-          }),
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          throw new Error(`OpenRouter ${response.status}: ${JSON.stringify(errorData.error || errorData)}`);
-        }
-
-        const data = await response.json();
-        const text = data.choices[0]?.message?.content;
-        
-        if (!text) throw new Error('Empty response content');
-        
-        return parseAIResponse(text);
-      } catch (err) {
-        console.error(`[AI] Failed with ${modelId}:`, err.message);
-        lastError = err;
-        continue; // Fallback to next model
-      }
-    }
-
-    console.warn('[AI] CRITICAL FAILURE: Both free models failed. Returning safe placeholder JSON.');
-    return SAFE_FALLBACK_JSON;
-  }
-}
-
-// ═══════════════════════════════════════════════════════════
-// Factory
-// ═══════════════════════════════════════════════════════════
-
-function createLLMProvider() {
-  const provider = process.env.AI_PROVIDER || 'openrouter';
-
-  switch (provider) {
-    case 'gemini':
-      return new GeminiProvider(process.env.GEMINI_API_KEY);
-    case 'openrouter':
-      return new OpenRouterProvider(process.env.OPENROUTER_API_KEY);
-    default:
-      throw new Error(`Unknown AI_PROVIDER: ${provider}`);
-  }
-}
-
-// ═══════════════════════════════════════════════════════════
-// Prompt Engineering
-// ═══════════════════════════════════════════════════════════
-
-function buildSEOGEOPrompt(compressedPayload) {
-  return `You are an expert SEO and GEO (Generative Engine Optimization) auditor.
-Analyze the following webpage data and return a STRICT JSON response.
-
-Input Page Data:
-${compressedPayload}
-
-──────────────────────────────────────────────
-REQUIRED JSON STRUCTURE (Return ONLY valid JSON):
-
+Respond ONLY with a valid JSON object. No preamble. No explanation outside the JSON.
+Schema:
 {
-  "pageType": "Article|Product|Service|LandingPage|... ",
-  "entities": {
-    "who": ["Main Brand", "Author", "Organization"],
-    "what": ["Main Topic", "Key Offering", "Niche"],
-    "how": ["Solution provided", "Benefit delivered"],
-    "result": ["Specific Outcome", "Target Result"]
-  },
+  "geo_score": 85,
+  "entity_clarity": 70,
+  "topical_authority": 90,
+  "citation_readiness": 65,
+  "detected_entities": ["Entity A", "Entity B"],
+  "ai_summary": "<2 sentence plain-English summary of GEO readiness>",
   "issues": [
     {
-      "category": "technical_seo|onpage_seo|schema|geo",
-      "severity": "critical|warning|info",
-      "title": "Short title",
-      "description": "What is wrong"
+      "category": "GEO",
+      "severity": "CRITICAL",
+      "title": "Title of issue",
+      "description": "Detailed desc",
+      "current_code": "...",
+      "suggested_code": "..."
     }
   ],
-  "recommendations": [
-    {
-      "category": "technical_seo|onpage_seo|schema|geo",
-      "priority": "high|medium|low",
-      "problem": "Problem desc",
-      "why": "Business Impact",
-      "fix": "Specific fix instructions",
-      "example": "Snippet or text example"
-    }
-  ],
-  "improvedSchema": { 
-    "@context": "https://schema.org",
-    "@type": "...",
-    "info": "Optimized version of existing schema or new suggested block"
-  }
+  "schema_suggestion": "JSON-LD string"
 }
 
-Rules:
-- Score 0-100 logic is gone; focus on Entity Clarity and GEO Readiness.
-- Entities are CRITICAL for GEO (AI engine understanding).
-- improvedSchema must be 100% valid JSON-LD.
-- Return ONLY JSON. No explanations. No markdown fences.`;
-}
+Compressed HTML to analyze:
+${compressedHTML}
+`;
 
-// ═══════════════════════════════════════════════════════════
-// Response Parser
-// ═══════════════════════════════════════════════════════════
-
-function parseAIResponse(rawText) {
-  let cleaned = rawText.trim();
-  if (cleaned.startsWith('```')) {
-    cleaned = cleaned.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '');
-  }
-
+/**
+ * Calls AI with a retry mechanism for robust JSON harvesting.
+ * Supports both Mistral (direct) and OpenRouter based on AI_PROVIDER env.
+ */
+async function callAIWithRetry(prompt, attempts = 2) {
+  // Primary Attempt: OpenRouter (Google Gemini 1.5 Flash)
   try {
-    return JSON.parse(cleaned);
+    const rawKey = process.env.OPENROUTER_API_KEY || process.env.OPENROUTER_KEY;
+    const openRouterKey = rawKey?.trim();
+
+    if (openRouterKey && openRouterKey !== 'your_openrouter_key_here' && openRouterKey.length > 10) {
+      console.log(`[AI] PRIMARY ATTEMPT: OpenRouter (stepfun/step-3.5-flash:free)...`);
+      const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${openRouterKey}`,
+          'HTTP-Referer': process.env.CLIENT_URL || 'http://localhost:3000',
+          'X-Title': 'GEO Audit',
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: 'stepfun/step-3.5-flash:free',
+          messages: [{ role: 'user', content: prompt }],
+          temperature: 0.1,
+          response_format: { type: "json_object" }
+        })
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(`OpenRouter ${res.status}: ${JSON.stringify(errData)}`);
+      }
+
+      const data = await res.json();
+      const text = data.choices[0]?.message?.content;
+      if (!text) throw new Error('Empty AI response from OpenRouter');
+      return JSON.parse(text.replace(/```json|```/g, '').trim());
+    } else {
+      console.log(`[AI] No OpenRouter API key found. Skipping primary AI.`);
+    }
   } catch (err) {
-    console.error('AI response parse error:', err.message);
+    console.error(`[AI] Primary OpenRouter failed:`, err.message);
+  }
+
+  // Fallback Attempt: Mistral Direct
+  console.log(`[AI] FALLBACK ATTEMPT: Mistral Direct (mistral-small-latest)...`);
+  for (let i = 0; i < attempts; i++) {
+    try {
+      // Using the exact fallback key provided by the user
+      const mistralKey = process.env.MISTRAL_API_KEY || 'oUgHHTZS9xmvPfTbWFzcCqnte04mvINS';
+      
+      const res = await fetch('https://api.mistral.ai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${mistralKey}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: 'mistral-small-latest',
+          messages: [{ role: 'user', content: prompt }],
+          temperature: 0.1,
+          response_format: { type: "json_object" }
+        })
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(`Mistral ${res.status}: ${JSON.stringify(errData)}`);
+      }
+
+      const data = await res.json();
+      const text = data.choices[0]?.message?.content;
+      if (!text) throw new Error('Empty AI response from Mistral');
+      return JSON.parse(text.replace(/```json|```/g, '').trim());
+    } catch (err) {
+      console.error(`[AI] Mistral fallback attempt ${i + 1} failed:`, err.message);
+      if (i === attempts - 1) throw err;
+    }
+  }
+}
+
+// Global Fallback
+const SAFE_FALLBACK_JSON = {
+  geo_score: 50,
+  entity_clarity: 50,
+  topical_authority: 50,
+  citation_readiness: 50,
+  detected_entities: [],
+  ai_summary: "AI analysis unavailable. Please check API configuration.",
+  issues: [],
+  schema_suggestion: ""
+};
+
+/**
+ * Main analysis entry point triggered by worker.js
+ */
+async function analyzeSemantic(compressedHTML, ruleResults) {
+  const prompt = buildPrompt(compressedHTML, ruleResults);
+  try {
+    return await callAIWithRetry(prompt);
+  } catch (err) {
+    console.error('[AI] Fatal Ref Error:', err.message);
     return SAFE_FALLBACK_JSON;
   }
 }
 
-module.exports = { createLLMProvider, GeminiProvider, OpenRouterProvider, SAFE_FALLBACK_JSON };
+module.exports = { buildPrompt, callAIWithRetry, analyzeSemantic, SAFE_FALLBACK_JSON };

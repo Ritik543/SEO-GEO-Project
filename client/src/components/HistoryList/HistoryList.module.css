@@ -1,0 +1,168 @@
+.historyContainer {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: var(--sp-12) var(--sp-6);
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--sp-10);
+  gap: var(--sp-6);
+}
+
+.searchWrapper {
+  display: flex;
+  align-items: center;
+  background: var(--surface-container-high);
+  border: 1px solid rgba(144, 143, 160, 0.1);
+  padding: var(--sp-2) var(--sp-4);
+  border-radius: var(--radius-lg);
+  gap: var(--sp-2);
+  min-width: 300px;
+}
+
+.searchInput {
+  background: none;
+  border: none;
+  font-family: var(--font-body);
+  color: var(--on-surface);
+  font-size: 0.875rem;
+  width: 100%;
+  outline: none;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+
+.reportCard {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--sp-4) var(--sp-6);
+  transition: transform 0.2s ease, border-color 0.2s ease;
+  border: 1px solid rgba(144, 143, 160, 0.05); /* Ghostly default */
+}
+
+.reportCard:hover {
+  transform: translateY(-2px);
+  border-color: rgba(73, 75, 214, 0.2);
+}
+
+.mainInfo {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  flex: 1;
+}
+
+.urlGroup {
+  display: flex;
+  flex-direction: column;
+}
+
+.url {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--on-surface);
+  word-break: break-all;
+  max-width: 500px;
+}
+
+.date {
+  font-size: 0.75rem;
+  color: var(--on-surface-variant);
+  margin-top: 2px;
+}
+
+.scoresGrid {
+  display: flex;
+  gap: var(--sp-6);
+}
+
+.scoreItem {
+  display: flex;
+  flex-direction: column;
+}
+
+.scoreLabel {
+  font-size: 0.625rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--on-surface-variant);
+  font-weight: 600;
+}
+
+.scoreValue {
+  font-size: 1rem;
+  font-weight: 700;
+  font-family: var(--font-display);
+}
+
+.actions {
+  display: flex;
+  gap: var(--sp-2);
+}
+
+.deleteBtn {
+  background: var(--error-container) !important;
+  border: 1px solid var(--on-error) !important;
+  color: var(--on-error-container);
+  padding: var(--sp-3);
+}
+
+.deleteBtn:hover {
+  background: #ffb4ab !important; /* Lighter red */
+}
+
+.empty {
+  text-align: center;
+  padding: var(--sp-20) 0;
+  background: var(--surface-container-low);
+  border-radius: var(--radius-lg);
+  border: 1px dashed rgba(144, 143, 160, 0.2);
+}
+
+/* Response: Stack scores on mobile */
+@media (max-width: 768px) {
+  .header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .searchWrapper {
+    width: 100%;
+    min-width: 100%;
+  }
+
+  .reportCard {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--sp-6);
+  }
+
+  .scoresGrid {
+    gap: var(--sp-4);
+    flex-wrap: wrap;
+  }
+
+  .actions {
+    width: 100%;
+  }
+
+  .actions a, .actions button {
+    flex: 1;
+  }
+}
+
+@media (max-width: 375px) {
+  .scoresGrid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    width: 100%;
+  }
+}
