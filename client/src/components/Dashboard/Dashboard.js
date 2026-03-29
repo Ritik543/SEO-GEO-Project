@@ -74,6 +74,28 @@ export default function Dashboard({ report, onReset }) {
             </div>
           </div>
 
+          {/* Crawler Blocked Warning */}
+          {report.crawlerBlocked && (
+            <div style={{
+              background: 'rgba(255, 171, 0, 0.12)',
+              border: '1px solid rgba(255, 171, 0, 0.4)',
+              borderRadius: '12px',
+              padding: '16px 20px',
+              marginBottom: '24px',
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: '12px'
+            }}>
+              <span className="material-symbols-outlined" style={{ color: '#ffab00', fontSize: '24px', marginTop: '2px' }}>warning</span>
+              <div>
+                <p className="text-title-sm" style={{ color: '#ffab00', marginBottom: '4px' }}>Crawler Blocked by Firewall</p>
+                <p className="text-body-sm text-muted">
+                  {report.crawlerWarning || "This site's firewall (Cloudflare) blocked our crawler. Scores are based on the security page, not the actual content. Run the audit locally for accurate results."}
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Scores */}
           <ScorePlane scores={scores} />
 

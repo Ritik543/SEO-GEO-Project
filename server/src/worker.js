@@ -64,8 +64,14 @@ auditQueue.process('audit', 2, async (job) => {
       console.log(`[WORKER] Step 4a: Content extracted | title="${content.title}" | headings.h1=${content.headings?.h1?.length || 0} | headings.h2=${content.headings?.h2?.length || 0}`);
       
       // Explicit Block Detection
-      if (content.title && (content.title.includes('Just a moment') || content.title.includes('Cloudflare') || content.title.includes('Attention'))) {
-        console.warn(`[WORKER] ⚠ BLOCKED PAGE DETECTED for ${url}. Title: "${content.title}". AI analysis will be limited.`);
+      const isBlocked = statusCode === 403 || (content.title && (
+        content.title.includes('Just a moment') || 
+        content.title.includes('Cloudflare') || 
+        content.title.includes('Attention Required') ||
+        content.title.includes('Access denied')
+      ));
+      if (isBlocked) {
+        console.warn(`[WORKER] ⚠ BLOCKED PAGE DETECTED for ${url}. Title: "${content.title}". Crawler was blocked by Cloudflare/WAF.`);
       }
 
       const schemas = extractSchema(html);
@@ -139,6 +145,8 @@ auditQueue.process('audit', 2, async (job) => {
         },
         processingTime,
         completedAt: new Date(),
+        crawlerBlocked: isBlocked,
+        crawlerWarning: isBlocked ? 'This site\'s firewall (Cloudflare) blocked our crawler. The scores shown are based on the security challenge page, not the actual website content. Try auditing the site from your local machine for accurate results.' : null,
       };
 
       await Report.findOneAndUpdate({ jobId }, reportPayload);
