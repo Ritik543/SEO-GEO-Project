@@ -76,16 +76,16 @@ auditQueue.process('audit', 2, async (job) => {
         url: finalUrl || url,
         status: 'completed',
         scores: finalScores,
-        issues: [...ruleResults.issues, ...(aiResults.issues || [])].map(i => ({
+        issues: [...ruleResults.issues, ...(aiResults?.issues || [])].map(i => ({
           ...i,
           category: (i.category || 'SEO').toLowerCase()
         })),
         geoInsights: {
-          entityClarity: aiResults.entity_clarity || 0,
-          topicalAuthority: aiResults.topical_authority || 0,
-          citationReadiness: aiResults.citation_readiness || 0,
-          detected_entities: aiResults.detected_entities || [],
-          ai_summary: aiResults.ai_summary || 'AI analysis completed.',
+          entityClarity: Number(aiResults?.entity_clarity || aiResults?.entityClarity || 0),
+          topicalAuthority: Number(aiResults?.topical_authority || aiResults?.topicalAuthority || 0),
+          citationReadiness: Number(aiResults?.citation_readiness || aiResults?.citationReadiness || 0),
+          detected_entities: aiResults?.detected_entities || aiResults?.entities || [],
+          ai_summary: aiResults?.ai_summary || aiResults?.summary || 'AI analysis completed.',
         },
         improvedSchema: (() => {
           let schema = aiResults.schema_suggestion;
