@@ -77,6 +77,15 @@ const reportSchema = new mongoose.Schema(
     completedAt: Date,
     pdfUrl: String,
     error: String,
+    crawlMethod: {
+      type: String,
+      enum: ['direct', 'google_cache', 'common_crawl', 'blocked'],
+    },
+    crawlWarning: {
+      type: { type: String, enum: ['BLOCKED', 'CACHED'] },
+      message: String,
+      crawlMethod: String,
+    },
   },
   { timestamps: true }
 );

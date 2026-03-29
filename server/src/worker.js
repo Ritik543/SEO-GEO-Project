@@ -5,11 +5,11 @@ const mongoose = require('mongoose');
 const Report = require('./models/Report');
 
 const cheerio = require('cheerio');
-const { crawlPage } = require('./services/crawler.service');
+const { crawlWithFallback } = require('./services/crawler.service');
 const { extractContent } = require('./services/content.service');
 const { extractSchema } = require('./services/schema.service');
 const { compressHTML } = require('./services/compressor.service');
-const { callAIWithRetry, buildPrompt } = require('./services/ai.service');
+const { analyzeSemantic } = require('./services/ai.service');
 const { runRuleChecks } = require('./services/rules.service');
 const { getPageSpeedData } = require('./services/pagespeed.service');
 const { computeScores } = require('./services/scoring.service');
@@ -37,62 +37,87 @@ auditQueue.process('audit', 2, async (job) => {
     const startTime = Date.now();
 
     try {
-      // Step 1: Crawl (10%)
+      // Step 1: Crawl with fallback chain (direct → Google Cache → Common Crawl)
       await Report.findOneAndUpdate({ jobId }, { status: 'crawling' });
-      await updateProgress(jobId, 10, 'Fetching page HTML...', 'crawling');
-      const { html, finalUrl, statusCode, loadTimeMs, isBlocked, source } = await crawlPage(url);
-      console.log(`[WORKER] Step 1 DONE: source=${source} | status=${statusCode} | HTML=${html.length} chars | ${loadTimeMs}ms | blocked=${isBlocked}`);
-      const $ = cheerio.load(html);
+      await updateProgress(jobId, 10, 'Fetching page content...', 'crawling');
+
+      const crawlResult = await crawlWithFallback(url);
+      console.log(`[WORKER] Step 1 DONE: layer=${crawlResult.layer} | success=${crawlResult.success} | status=${crawlResult.statusCode} | HTML=${crawlResult.html?.length || 0} chars | ${crawlResult.loadTimeMs}ms`);
+
+      // Determine what HTML to process and set crawl warning
+      let htmlToProcess;
+      let crawlWarning = null;
+
+      if (!crawlResult.success || crawlResult.isBlocked) {
+        // All layers failed — do partial audit with warning
+        crawlWarning = {
+          type: 'BLOCKED',
+          message: "This website's firewall blocked our crawler. SEO checks are based on limited data. GEO analysis is unavailable.",
+          crawlMethod: 'blocked'
+        };
+        // Use whatever minimal HTML we got back
+        htmlToProcess = crawlResult.html || '<html><head></head><body></body></html>';
+        console.warn(`[WORKER] ⚠ All crawl layers failed/blocked. Proceeding with partial audit.`);
+      } else {
+        htmlToProcess = crawlResult.html;
+        // If we had to use a cache, warn the user data may be stale
+        if (crawlResult.layer !== 'direct') {
+          crawlWarning = {
+            type: 'CACHED',
+            message: `Audit is based on ${crawlResult.layer === 'google_cache' ? "Google's cached version" : "Common Crawl archive"} of this page — direct access was blocked. Data may be up to 30 days old.`,
+            crawlMethod: crawlResult.layer
+          };
+          console.log(`[WORKER] ℹ Using cached crawl (${crawlResult.layer}). Warning will be shown in report.`);
+        }
+      }
+
+      const $ = cheerio.load(htmlToProcess);
+      const finalUrl = crawlResult.finalUrl || url;
 
       // Step 2: Rule-based checks (25%) — FAST, 100% accurate
       await Report.findOneAndUpdate({ jobId }, { status: 'extracting' });
       await updateProgress(jobId, 25, 'Running technical SEO checks...', 'extracting');
-      const ruleResults = runRuleChecks($, finalUrl || url);
-      console.log(`[WORKER] Step 2 DONE: Rule checks | title="${ruleResults.facts.title_text}" | wordCount=${ruleResults.facts.word_count} | issues=${ruleResults.issues.length} | techSEO=${ruleResults.scores.technical_seo} | onPage=${ruleResults.scores.on_page_seo}`);
+      const ruleResults = runRuleChecks($, finalUrl);
+      console.log(`[WORKER] Step 2 DONE: title="${ruleResults.facts.title_text}" | wordCount=${ruleResults.facts.word_count} | issues=${ruleResults.issues.length} | techSEO=${ruleResults.scores.technical_seo} | onPage=${ruleResults.scores.on_page_seo}`);
 
-      // Step 3: PageSpeed (40%) — Dual Strategy
+      // Step 3: PageSpeed (40%) — always use the real URL, not cache URL
       await updateProgress(jobId, 40, 'Fetching Mobile & Desktop performance metrics...', 'extracting');
       const [cwvMobile, cwvDesktop] = await Promise.all([
-        getPageSpeedData(finalUrl || url, 'mobile'),
-        getPageSpeedData(finalUrl || url, 'desktop')
+        getPageSpeedData(url, 'mobile'),
+        getPageSpeedData(url, 'desktop')
       ]);
 
       // Step 4: Compress + AI (70%) — GEO + semantic analysis only
       await Report.findOneAndUpdate({ jobId }, { status: 'analyzing' });
       await updateProgress(jobId, 55, 'Running AI semantic analysis...', 'analyzing');
-      const content = extractContent(html);
-      console.log(`[WORKER] Step 4a: Content extracted | title="${content.title}" | headings.h1=${content.headings?.h1?.length || 0} | headings.h2=${content.headings?.h2?.length || 0} | source=${source}`);
-      
-      if (isBlocked) {
-        console.warn(`[WORKER] ⚠ BLOCKED PAGE - crawl source was "${source}", title: "${content.title}"`);
-      }
+      const content = extractContent(htmlToProcess);
+      console.log(`[WORKER] Step 4a: title="${content.title}" | h1=${content.headings?.h1?.length || 0} | h2=${content.headings?.h2?.length || 0}`);
 
-      const schemas = extractSchema(html);
-      console.log(`[WORKER] Step 4b: Schema extracted | found ${schemas.length} JSON-LD blocks`);
-      
+      const schemas = extractSchema(htmlToProcess);
+      console.log(`[WORKER] Step 4b: ${schemas.length} JSON-LD blocks found`);
+
       const compressed = compressHTML(content, schemas);
-      console.log(`[WORKER] Step 4c: Compressed HTML length: ${compressed.length} chars (sending to AI)`);
+      console.log(`[WORKER] Step 4c: Compressed ${compressed.length} chars → sending to AI`);
 
-      const { analyzeSemantic } = require('./services/ai.service');
       const aiResults = await analyzeSemantic(compressed, ruleResults.facts) || {};
-      console.log(`[WORKER] Step 4d: AI Results received | keys=${Object.keys(aiResults).join(',')}`);
-      console.log(`[WORKER] Step 4d: AI Scores | geo_score=${aiResults.geo_score} | entity_clarity=${aiResults.entity_clarity} | topical_authority=${aiResults.topical_authority} | citation_readiness=${aiResults.citation_readiness}`);
+      console.log(`[WORKER] Step 4d: AI done | geo_score=${aiResults.geo_score} | entity_clarity=${aiResults.entity_clarity} | topical_authority=${aiResults.topical_authority} | citation_readiness=${aiResults.citation_readiness}`);
 
       // Step 5: Score (90%)
       await Report.findOneAndUpdate({ jobId }, { status: 'scoring' });
       await updateProgress(jobId, 90, 'Calculating final scores...', 'scoring');
       const finalScores = computeScores(ruleResults, cwvMobile, aiResults);
-      console.log(`[WORKER] Step 5 DONE: Final Scores | overall=${finalScores.overall} | techSEO=${finalScores.technical_seo} | onPage=${finalScores.onpage_seo} | schema=${finalScores.schema} | geo=${finalScores.geo}`);
+      console.log(`[WORKER] Step 5 DONE: overall=${finalScores.overall} | techSEO=${finalScores.technical_seo} | onPage=${finalScores.onpage_seo} | schema=${finalScores.schema} | geo=${finalScores.geo}`);
 
       // Step 6: Save to MongoDB (100%)
       const processingTime = Date.now() - startTime;
       const reportPayload = {
-        url: finalUrl || url,
+        url: finalUrl,
         status: 'completed',
         scores: finalScores,
         issues: [...ruleResults.issues, ...(aiResults?.issues || [])].map(i => ({
           ...i,
-          category: (i.category || 'SEO').toLowerCase()
+          severity: (i.severity || 'info').toLowerCase(),
+          category: (i.category || 'geo').toLowerCase()
         })),
         geoInsights: {
           entityClarity: Number(aiResults?.entity_clarity || aiResults?.entityClarity || 0),
@@ -102,18 +127,16 @@ auditQueue.process('audit', 2, async (job) => {
           ai_summary: aiResults?.ai_summary || aiResults?.summary || 'AI analysis completed.',
         },
         improvedSchema: (() => {
-          let schema = aiResults.schema_suggestion;
+          let schema = aiResults?.schema_suggestion;
           if (typeof schema === 'string') {
             try {
-              // Handle AI double-stringification or literal escaping
               const cleaned = schema.replace(/\\"/g, '"').replace(/^"/, '').replace(/"$/, '');
               return JSON.parse(cleaned);
             } catch (e) {
-              console.warn('AI Schema parsing failed, returning raw string.');
               return schema;
             }
           }
-          return schema || [];
+          return schema || null;
         })(),
         performance: {
           mobile: cwvMobile ? {
@@ -138,8 +161,8 @@ auditQueue.process('audit', 2, async (job) => {
         },
         processingTime,
         completedAt: new Date(),
-        crawlerBlocked: isBlocked,
-        crawlerWarning: isBlocked ? 'This site\'s firewall (Cloudflare) blocked our crawler. The scores shown are based on the security challenge page, not the actual website content. Try auditing the site from your local machine for accurate results.' : null,
+        crawlMethod: crawlResult.layer || 'direct',
+        crawlWarning,
       };
 
       await Report.findOneAndUpdate({ jobId }, reportPayload);
@@ -147,9 +170,8 @@ auditQueue.process('audit', 2, async (job) => {
 
       return { reportId: jobId };
     } catch (err) {
-      console.error(`Worker error for job ${jobId}:`, err.message);
+      console.error(`[WORKER] ✗ Error for job ${jobId}:`, err.message);
       const isFinalAttempt = job.attemptsMade >= (job.opts.attempts - 1) || job.opts.attempts <= 1;
-
       if (isFinalAttempt) {
         await Report.findOneAndUpdate({ jobId }, { status: 'failed', error: err.message });
         await updateProgress(jobId, 0, `Audit failed: ${err.message}`, 'failed');
