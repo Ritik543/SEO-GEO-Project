@@ -62,7 +62,8 @@ auditQueue.process('audit', 2, async (job) => {
       const schemas = extractSchema(html);
       const compressed = compressHTML(content, schemas);
 
-      const aiResults = await callAIWithRetry(buildPrompt(compressed, ruleResults.facts));
+      const { analyzeSemantic } = require('./services/ai.service');
+      const aiResults = await analyzeSemantic(compressed, ruleResults.facts) || {};
 
       // Step 5: Score (90%)
       await Report.findOneAndUpdate({ jobId }, { status: 'scoring' });
@@ -77,14 +78,14 @@ auditQueue.process('audit', 2, async (job) => {
         scores: finalScores,
         issues: [...ruleResults.issues, ...(aiResults.issues || [])].map(i => ({
           ...i,
-          category: i.category.toLowerCase()
+          category: (i.category || 'SEO').toLowerCase()
         })),
         geoInsights: {
-          entityClarity: aiResults.entity_clarity,
-          topicalAuthority: aiResults.topical_authority,
-          citationReadiness: aiResults.citation_readiness,
-          detected_entities: aiResults.detected_entities,
-          ai_summary: aiResults.ai_summary,
+          entityClarity: aiResults.entity_clarity || 0,
+          topicalAuthority: aiResults.topical_authority || 0,
+          citationReadiness: aiResults.citation_readiness || 0,
+          detected_entities: aiResults.detected_entities || [],
+          ai_summary: aiResults.ai_summary || 'AI analysis completed.',
         },
         improvedSchema: (() => {
           let schema = aiResults.schema_suggestion;
@@ -98,7 +99,7 @@ auditQueue.process('audit', 2, async (job) => {
               return schema;
             }
           }
-          return schema;
+          return schema || [];
         })(),
         performance: {
           mobile: cwvMobile ? {
