@@ -17,22 +17,22 @@ function computeScores(ruleResults, cwvData, aiResults) {
   const onPageSEO = ruleResults.scores.on_page_seo;
 
   // Schema: from AI (it reads and evaluates structured data context)
-  const schema = Math.min(100, Math.max(0, aiResults.geo_score || 50));
+  const schema = Math.min(100, Math.max(0, Number(aiResults?.geo_score || aiResults?.schema_score || 0)));
 
   // GEO: weighted average of AI's sub-scores
   const geo = Math.round(
-    (aiResults.entity_clarity * 0.35) +
-    (aiResults.topical_authority * 0.35) +
-    (aiResults.citation_readiness * 0.30)
+    (Number(aiResults?.entity_clarity || 0) * 0.35) +
+    (Number(aiResults?.topical_authority || 0) * 0.35) +
+    (Number(aiResults?.citation_readiness || 0) * 0.30)
   );
 
   // Overall: weighted composite
   const overall = Math.round(
-    (technicalSEO * 0.25) +
-    (onPageSEO * 0.25) +
-    (schema * 0.20) +
-    (geo * 0.30)
-  );
+    ((technicalSEO || 0) * 0.25) +
+    ((onPageSEO || 0) * 0.25) +
+    ((schema || 0) * 0.20) +
+    ((geo || 0) * 0.30)
+  ) || 0;
 
   return { 
     overall, 
