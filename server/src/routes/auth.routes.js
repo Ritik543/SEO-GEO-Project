@@ -11,8 +11,8 @@ const signToken = (userId) => jwt.sign(
 
 const cookieOptions = {
   httpOnly: true,
-  secure: process.env.NODE_ENV === 'production',
-  sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax', // Use 'lax' for localhost cross-port
+  secure: true, // Always secure for cross-site cookies
+  sameSite: 'none', // Critical for Vercel -> Render cross-site auth
   maxAge: 7 * 24 * 60 * 60 * 1000  // 7 days
 };
 

@@ -23,7 +23,10 @@ app.use(helmet({
   crossOriginResourcePolicy: { policy: "cross-origin" }
 }));
 app.use(cors({ 
-  origin: [process.env.CLIENT_URL || 'http://localhost:3000'],
+  origin: [
+    'http://localhost:3000',                            // Local testing
+    'https://seo-geo-project.vercel.app'                // Live Vercel frontend
+  ],
   credentials: true 
 }));
 app.use(cookieParser());
