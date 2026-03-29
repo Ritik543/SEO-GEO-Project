@@ -40,8 +40,8 @@ auditQueue.process('audit', 2, async (job) => {
       // Step 1: Crawl (10%)
       await Report.findOneAndUpdate({ jobId }, { status: 'crawling' });
       await updateProgress(jobId, 10, 'Fetching page HTML...', 'crawling');
-      const { html, finalUrl, statusCode, loadTimeMs } = await crawlPage(url);
-      console.log(`[WORKER] Step 1 DONE: Crawled ${finalUrl || url} | status=${statusCode} | HTML=${html.length} chars | ${loadTimeMs}ms`);
+      const { html, finalUrl, statusCode, loadTimeMs, isBlocked, source } = await crawlPage(url);
+      console.log(`[WORKER] Step 1 DONE: source=${source} | status=${statusCode} | HTML=${html.length} chars | ${loadTimeMs}ms | blocked=${isBlocked}`);
       const $ = cheerio.load(html);
 
       // Step 2: Rule-based checks (25%) — FAST, 100% accurate
@@ -61,17 +61,10 @@ auditQueue.process('audit', 2, async (job) => {
       await Report.findOneAndUpdate({ jobId }, { status: 'analyzing' });
       await updateProgress(jobId, 55, 'Running AI semantic analysis...', 'analyzing');
       const content = extractContent(html);
-      console.log(`[WORKER] Step 4a: Content extracted | title="${content.title}" | headings.h1=${content.headings?.h1?.length || 0} | headings.h2=${content.headings?.h2?.length || 0}`);
+      console.log(`[WORKER] Step 4a: Content extracted | title="${content.title}" | headings.h1=${content.headings?.h1?.length || 0} | headings.h2=${content.headings?.h2?.length || 0} | source=${source}`);
       
-      // Explicit Block Detection
-      const isBlocked = statusCode === 403 || (content.title && (
-        content.title.includes('Just a moment') || 
-        content.title.includes('Cloudflare') || 
-        content.title.includes('Attention Required') ||
-        content.title.includes('Access denied')
-      ));
       if (isBlocked) {
-        console.warn(`[WORKER] ⚠ BLOCKED PAGE DETECTED for ${url}. Title: "${content.title}". Crawler was blocked by Cloudflare/WAF.`);
+        console.warn(`[WORKER] ⚠ BLOCKED PAGE - crawl source was "${source}", title: "${content.title}"`);
       }
 
       const schemas = extractSchema(html);
