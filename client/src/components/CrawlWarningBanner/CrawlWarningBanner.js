@@ -1,6 +1,6 @@
 'use client';
 
-export function CrawlWarningBanner({ crawlWarning }) {
+export function CrawlWarningBanner({ crawlWarning, onTryHtml }) {
   if (!crawlWarning) return null;
 
   const isBlocked = crawlWarning.type === 'BLOCKED';
@@ -23,6 +23,14 @@ export function CrawlWarningBanner({ crawlWarning }) {
             : `Audit based on ${methodLabel}`}
         </p>
         <p className="warning-message">{crawlWarning.message}</p>
+        {isBlocked && typeof onTryHtml === 'function' && (
+          <button 
+            className="mt-3 px-4 py-1.5 bg-white/10 hover:bg-white/20 border border-white/20 rounded text-xs font-bold uppercase tracking-wider transition-colors"
+            onClick={() => onTryHtml(crawlWarning.url)}
+          >
+            Try Paste HTML Instead
+          </button>
+        )}
       </div>
     </div>
   );

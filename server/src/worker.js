@@ -33,46 +33,78 @@ async function updateProgress(jobId, progress, message, stage = 'processing') {
 
 // ─── Worker Definition ──────────────────────────────────────
 auditQueue.process('audit', 2, async (job) => {
-    const { url, jobId } = job.data;
+    const { url, mode = 'url', htmlSource, jobId } = job.data;
     const startTime = Date.now();
 
     try {
-      // Step 1: Crawl with fallback chain (direct → Google Cache → Common Crawl)
-      await Report.findOneAndUpdate({ jobId }, { status: 'crawling' });
-      await updateProgress(jobId, 10, 'Fetching page content...', 'crawling');
-
-      const crawlResult = await crawlWithFallback(url);
-      console.log(`[WORKER] Step 1 DONE: layer=${crawlResult.layer} | success=${crawlResult.success} | status=${crawlResult.statusCode} | HTML=${crawlResult.html?.length || 0} chars | ${crawlResult.loadTimeMs}ms`);
-
-      // Determine what HTML to process and set crawl warning
       let htmlToProcess;
       let crawlWarning = null;
+      let finalUrl = url;
+      let crawlResult = { layer: 'direct', success: true, statusCode: 200, loadTimeMs: 0 };
 
-      if (!crawlResult.success || crawlResult.isBlocked) {
-        // All layers failed — do partial audit with warning
-        crawlWarning = {
-          type: 'BLOCKED',
-          message: "This website's firewall blocked our crawler. SEO checks are based on limited data. GEO analysis is unavailable.",
-          crawlMethod: 'blocked'
-        };
-        // Use whatever minimal HTML we got back
-        htmlToProcess = crawlResult.html || '<html><head></head><body></body></html>';
-        console.warn(`[WORKER] ⚠ All crawl layers failed/blocked. Proceeding with partial audit.`);
-      } else {
-        htmlToProcess = crawlResult.html;
-        // If we had to use a cache, warn the user data may be stale
-        if (crawlResult.layer !== 'direct') {
+      // Step 1: Resource Acquisition based on Mode
+      await Report.findOneAndUpdate({ jobId }, { status: 'crawling' });
+
+      if (mode === 'html') {
+        // --- MODE: HTML ---
+        await updateProgress(jobId, 10, 'Processing provided HTML source...', 'crawling');
+        htmlToProcess = htmlSource;
+        crawlResult.layer = 'manual_paste';
+        console.log(`[WORKER] Mode: HTML | Processing ${htmlSource.length} chars`);
+      } 
+      else if (mode === 'sitemap') {
+        // --- MODE: SITEMAP ---
+        await updateProgress(jobId, 10, 'Fetching sitemap...', 'crawling');
+        try {
+          const sitemapRes = await fetch(url);
+          const sitemapXml = await sitemapRes.text();
+          const $sitemap = cheerio.load(sitemapXml, { xmlMode: true });
+          const urls = [];
+          $sitemap('loc').each((i, el) => {
+            urls.push($sitemap(el).text().trim());
+          });
+
+          if (urls.length === 0) throw new Error('No URLs found in sitemap.');
+          
+          finalUrl = urls[0]; // Audit the first URL from sitemap
+          console.log(`[WORKER] Mode: SITEMAP | Found ${urls.length} URLs | Auditing first: ${finalUrl}`);
+          await updateProgress(jobId, 15, `Found ${urls.length} URLs. Auditing: ${new URL(finalUrl).pathname}`, 'crawling');
+          
+          crawlResult = await crawlWithFallback(finalUrl);
+          htmlToProcess = crawlResult.html;
+        } catch (e) {
+          console.error(`[WORKER] Sitemap error: ${e.message}`);
+          throw new Error(`Sitemap processing failed: ${e.message}`);
+        }
+      } 
+      else {
+        // --- MODE: URL (Default) ---
+        await updateProgress(jobId, 10, 'Fetching page content...', 'crawling');
+        crawlResult = await crawlWithFallback(url);
+        finalUrl = crawlResult.finalUrl || url;
+        
+        if (!crawlResult.success || crawlResult.isBlocked) {
           crawlWarning = {
-            type: 'CACHED',
-            message: `Audit is based on ${crawlResult.layer === 'google_cache' ? "Google's cached version" : "Common Crawl archive"} of this page — direct access was blocked. Data may be up to 30 days old.`,
-            crawlMethod: crawlResult.layer
+            type: 'BLOCKED',
+            message: "This website's firewall blocked our crawler. SEO checks are based on limited data. GEO analysis is unavailable.",
+            crawlMethod: 'blocked'
           };
-          console.log(`[WORKER] ℹ Using cached crawl (${crawlResult.layer}). Warning will be shown in report.`);
+          htmlToProcess = crawlResult.html || '<html><head></head><body></body></html>';
+        } else {
+          htmlToProcess = crawlResult.html;
+          if (crawlResult.layer !== 'direct') {
+            crawlWarning = {
+              type: 'CACHED',
+              message: `Audit is based on ${crawlResult.layer === 'google_cache' ? "Google's cached version" : "Common Crawl archive"} of this page — direct access was blocked. Data may be up to 30 days old.`,
+              crawlMethod: crawlResult.layer
+            };
+          }
         }
       }
 
+      console.log(`[WORKER] Step 1 DONE: mode=${mode} | layer=${crawlResult.layer} | success=${crawlResult.success} | HTML=${htmlToProcess?.length || 0} chars`);
+
       const $ = cheerio.load(htmlToProcess);
-      const finalUrl = crawlResult.finalUrl || url;
 
       // Step 2: Rule-based checks (25%) — FAST, 100% accurate
       await Report.findOneAndUpdate({ jobId }, { status: 'extracting' });
@@ -80,12 +112,22 @@ auditQueue.process('audit', 2, async (job) => {
       const ruleResults = runRuleChecks($, finalUrl);
       console.log(`[WORKER] Step 2 DONE: title="${ruleResults.facts.title_text}" | wordCount=${ruleResults.facts.word_count} | issues=${ruleResults.issues.length} | techSEO=${ruleResults.scores.technical_seo} | onPage=${ruleResults.scores.on_page_seo}`);
 
-      // Step 3: PageSpeed (40%) — always use the real URL, not cache URL
+      // Step 3: PageSpeed (40%)
       await updateProgress(jobId, 40, 'Fetching Mobile & Desktop performance metrics...', 'extracting');
-      const [cwvMobile, cwvDesktop] = await Promise.all([
-        getPageSpeedData(url, 'mobile'),
-        getPageSpeedData(url, 'desktop')
-      ]);
+      
+      let cwvMobile = null;
+      let cwvDesktop = null;
+
+      // Only run PageSpeed if a valid URL is available
+      if (url && url.startsWith('http')) {
+        console.log(`[WORKER] Running PageSpeed for: ${url}`);
+        [cwvMobile, cwvDesktop] = await Promise.all([
+          getPageSpeedData(url, 'mobile'),
+          getPageSpeedData(url, 'desktop')
+        ]);
+      } else {
+        console.log(`[WORKER] Skipping PageSpeed (no valid URL provided)`);
+      }
 
       // Step 4: Compress + AI (70%) — GEO + semantic analysis only
       await Report.findOneAndUpdate({ jobId }, { status: 'analyzing' });

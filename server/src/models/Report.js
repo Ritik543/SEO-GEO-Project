@@ -31,6 +31,12 @@ const reportSchema = new mongoose.Schema(
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true },
     jobId: { type: String, required: true, unique: true, index: true },
     url: { type: String, required: true },
+    mode: { 
+      type: String, 
+      enum: ['url', 'sitemap', 'html'], 
+      default: 'url' 
+    },
+    htmlSource: { type: String, select: false }, // Use select: false so it's not sent to client by default
     status: {
       type: String,
       enum: ['pending', 'crawling', 'extracting', 'analyzing', 'scoring', 'completed', 'failed'],

@@ -11,17 +11,27 @@ const router = express.Router();
 // ═══════════════════════════════════════════════════════════
 router.post('/', async (req, res) => {
   try {
-    const { url } = req.body;
-
-    if (!url || typeof url !== 'string') {
+    const { url, mode = 'url', htmlSource } = req.body;
+    
+    // Basic validation
+    if (mode === 'html') {
+      if (!htmlSource || typeof htmlSource !== 'string' || htmlSource.length < 50) {
+        return res.status(400).json({ error: 'Valid HTML source is required (minimum 50 chars).' });
+      }
+      if (htmlSource.length > 2 * 1024 * 1024) { // 2MB limit
+        return res.status(400).json({ error: 'HTML source is too large (max 2MB).' });
+      }
+    } else if (!url || typeof url !== 'string') {
       return res.status(400).json({ error: 'A valid URL is required.' });
     }
 
-    // Basic URL validation
-    try {
-      new URL(url);
-    } catch {
-      return res.status(400).json({ error: 'Invalid URL format.' });
+    // Basic URL validation if url is provided
+    if (url) {
+      try {
+        new URL(url);
+      } catch {
+        return res.status(400).json({ error: 'Invalid URL format.' });
+      }
     }
 
     const jobId = uuidv4();
@@ -29,13 +39,15 @@ router.post('/', async (req, res) => {
     // Create a pending report in MongoDB (linked to user)
     await Report.create({ 
       jobId, 
-      url, 
+      url: url || 'HTML Audit', 
+      mode,
+      htmlSource: mode === 'html' ? htmlSource : undefined,
       status: 'pending',
       userId: req.userId 
     });
 
     // Enqueue the job for the worker
-    await auditQueue.add('audit', { url, jobId }, {
+    await auditQueue.add('audit', { url, mode, htmlSource, jobId }, {
       attempts: 2,
       backoff: { type: 'exponential', delay: 5000 },
       removeOnComplete: 100,

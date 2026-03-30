@@ -1,28 +1,60 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
-export default function AuditHero({ onSubmit }) {
+export default function AuditHero({ onSubmit, prefillData }) {
+  const [activeTab, setActiveTab] = useState('url'); // 'url' | 'sitemap' | 'html'
   const [url, setUrl] = useState('');
+  const [sitemapUrl, setSitemapUrl] = useState('');
+  const [htmlSource, setHtmlSource] = useState('');
+  const [htmlUrl, setHtmlUrl] = useState('');
   const [error, setError] = useState('');
+
+  // Handle prefill (e.g., coming from a blocked crawl)
+  useEffect(() => {
+    if (prefillData) {
+      if (prefillData.mode === 'html') {
+        setActiveTab('html');
+        setHtmlUrl(prefillData.url || '');
+      } else if (prefillData.mode === 'sitemap') {
+        setActiveTab('sitemap');
+        setSitemapUrl(prefillData.url || '');
+      } else {
+        setUrl(prefillData.url || '');
+      }
+    }
+  }, [prefillData]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
     setError('');
 
-    if (!url.trim()) {
-      setError('Please enter a URL.');
-      return;
+    if (activeTab === 'url') {
+      if (!url.trim()) return setError('Please enter a website URL.');
+      const finalUrl = url.startsWith('http') ? url : `https://${url}`;
+      try { new URL(finalUrl); } catch { return setError('Invalid URL format.'); }
+      onSubmit({ url: finalUrl, mode: 'url' });
+    } 
+    else if (activeTab === 'sitemap') {
+      if (!sitemapUrl.trim()) return setError('Please enter a sitemap URL.');
+      const finalUrl = sitemapUrl.startsWith('http') ? sitemapUrl : `https://${sitemapUrl}`;
+      try { new URL(finalUrl); } catch { return setError('Invalid sitemap URL.'); }
+      onSubmit({ url: finalUrl, mode: 'sitemap' });
+    } 
+    else if (activeTab === 'html') {
+      if (!htmlSource.trim()) return setError('Please paste the HTML source.');
+      if (htmlSource.length < 100) return setError('HTML source seems too short. Please paste the full page source.');
+      
+      let finalUrl = htmlUrl.trim();
+      if (finalUrl && !finalUrl.startsWith('http')) finalUrl = `https://${finalUrl}`;
+      if (finalUrl) { try { new URL(finalUrl); } catch { return setError('Invalid optional URL format.'); } }
+      
+      onSubmit({ 
+        url: finalUrl, 
+        mode: 'html', 
+        htmlSource: htmlSource.trim() 
+      });
     }
-
-    try {
-      new URL(url.startsWith('http') ? url : `https://${url}`);
-    } catch {
-      setError('Please enter a valid URL.');
-      return;
-    }
-
-    onSubmit(url.startsWith('http') ? url : `https://${url}`);
   };
 
   return (
@@ -40,29 +72,127 @@ export default function AuditHero({ onSubmit }) {
           AI-powered audits that go beyond rankings to understand how search engines and AI see your content.
         </p>
         
-        {/* Prominent URL Input */}
-        <form onSubmit={handleSubmit} className="w-full max-w-2xl relative group">
-          <div className="absolute -inset-1 bg-gradient-to-r from-primary/20 to-primary-container/20 rounded-xl blur-xl opacity-0 group-focus-within:opacity-100 transition-opacity duration-500"></div>
-          <div className="relative flex flex-col sm:flex-row items-center p-2 rounded-xl bg-surface-container border border-outline-variant/20 shadow-2xl">
-            <div className="pl-4 pr-2 hidden sm:flex items-center text-outline">
-              <span className="material-symbols-outlined text-xl">language</span>
-            </div>
-            <input 
-              className="w-full bg-transparent border-none focus:ring-0 text-on-surface placeholder:text-outline/50 font-medium py-3 px-4 sm:px-0 text-lg outline-none" 
-              placeholder="https://yourwebsite.com/blog-post-url" 
-              type="url"
-              value={url}
-              onChange={(e) => setUrl(e.target.value)}
-            />
-            <button 
-              type="submit"
-              className="mt-2 sm:mt-0 ml-0 sm:ml-2 px-8 py-3 w-full sm:w-auto bg-gradient-to-br from-primary to-primary-container text-on-primary font-bold rounded-lg shadow-lg hover:brightness-110 active:scale-95 transition-all duration-200 whitespace-nowrap"
-            >
-              Analyze Page
-            </button>
+        {/* Input Card with Tabs */}
+        <div className="w-full max-w-3xl bg-surface-container border border-outline-variant/20 rounded-2xl shadow-2xl overflow-hidden group">
+          {/* Tab Headers */}
+          <div className="flex border-b border-outline-variant/10 bg-surface-container-high/50 p-1">
+            {[
+              { id: 'url', label: 'Website URL', icon: 'language' },
+              { id: 'sitemap', label: 'Sitemap', icon: 'account_tree' },
+              { id: 'html', label: 'Paste HTML', icon: 'html' }
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => { setActiveTab(tab.id); setError(''); }}
+                className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl transition-all duration-300 font-label text-xs font-bold uppercase tracking-widest ${
+                  activeTab === tab.id 
+                  ? 'bg-primary text-on-primary shadow-lg' 
+                  : 'text-on-surface-variant hover:bg-surface-bright hover:text-on-surface'
+                }`}
+              >
+                <span className="material-symbols-outlined text-[18px]">{tab.icon}</span>
+                <span className="hidden sm:inline">{tab.label}</span>
+              </button>
+            ))}
           </div>
-          {error && <p className="text-error mt-4 text-sm text-left px-2">{error}</p>}
-        </form>
+
+          {/* Tab Content */}
+          <form onSubmit={handleSubmit} className="p-6 md:p-8">
+            {activeTab === 'url' && (
+              <div className="relative flex flex-col sm:flex-row items-center gap-4">
+                <div className="w-full relative">
+                  <div className="absolute inset-y-0 left-4 flex items-center text-outline/60 pointer-events-none">
+                    <span className="material-symbols-outlined text-xl">link</span>
+                  </div>
+                  <input 
+                    className="w-full bg-surface-container-lowest border border-outline-variant/15 focus:border-primary/50 focus:ring-4 focus:ring-primary/10 rounded-xl text-on-surface placeholder:text-outline/40 font-medium py-4 pl-12 pr-4 text-lg outline-none transition-all" 
+                    placeholder="https://yourwebsite.com/page-to-audit" 
+                    type="url"
+                    value={url}
+                    onChange={(e) => setUrl(e.target.value)}
+                  />
+                </div>
+                <button 
+                  type="submit"
+                  className="w-full sm:w-auto px-10 py-4 bg-gradient-to-br from-primary to-primary-container text-on-primary font-bold rounded-xl shadow-xl hover:brightness-110 active:scale-[0.98] transition-all duration-200 whitespace-nowrap text-lg"
+                >
+                  Analyze Page
+                </button>
+              </div>
+            )}
+
+            {activeTab === 'sitemap' && (
+              <div className="flex flex-col gap-4">
+                <div className="relative flex flex-col sm:flex-row items-center gap-4">
+                  <div className="w-full relative">
+                    <div className="absolute inset-y-0 left-4 flex items-center text-outline/60 pointer-events-none">
+                      <span className="material-symbols-outlined text-xl">account_tree</span>
+                    </div>
+                    <input 
+                      className="w-full bg-surface-container-lowest border border-outline-variant/15 focus:border-primary/50 focus:ring-4 focus:ring-primary/10 rounded-xl text-on-surface placeholder:text-outline/40 font-medium py-4 pl-12 pr-4 text-lg outline-none transition-all" 
+                      placeholder="https://yourwebsite.com/sitemap.xml" 
+                      type="url"
+                      value={sitemapUrl}
+                      onChange={(e) => setSitemapUrl(e.target.value)}
+                    />
+                  </div>
+                  <button 
+                    type="submit"
+                    className="w-full sm:w-auto px-10 py-4 bg-gradient-to-br from-primary to-primary-container text-on-primary font-bold rounded-xl shadow-xl hover:brightness-110 active:scale-[0.98] transition-all duration-200 whitespace-nowrap text-lg"
+                  >
+                    Analyze Sitemap
+                  </button>
+                </div>
+                <p className="text-xs text-on-surface-variant/60 ml-1">Discovery mode: We'll fetch the sitemap and audit the primary page.</p>
+              </div>
+            )}
+
+            {activeTab === 'html' && (
+              <div className="flex flex-col gap-6">
+                <div className="relative">
+                  <textarea 
+                    className="w-full min-h-[220px] bg-surface-container-lowest border border-outline-variant/15 focus:border-primary/50 focus:ring-4 focus:ring-primary/10 rounded-xl text-on-surface placeholder:text-outline/40 font-mono text-sm p-4 outline-none transition-all resize-none" 
+                    placeholder="Paste full HTML source here... (View Page Source → Copy → Paste here)" 
+                    value={htmlSource}
+                    onChange={(e) => setHtmlSource(e.target.value)}
+                  />
+                  <div className="absolute top-4 right-4 flex items-center gap-2 pointer-events-none opacity-40">
+                    <span className="text-[10px] font-bold uppercase tracking-tighter">Code Input</span>
+                    <span className="material-symbols-outlined text-sm">code</span>
+                  </div>
+                </div>
+                
+                <div className="flex flex-col sm:flex-row items-center gap-4">
+                  <div className="w-full relative">
+                    <div className="absolute inset-y-0 left-4 flex items-center text-outline/60 pointer-events-none">
+                      <span className="material-symbols-outlined text-xl">language</span>
+                    </div>
+                    <input 
+                      className="w-full bg-surface-container-lowest border border-outline-variant/15 focus:border-primary/50 focus:ring-4 focus:ring-primary/10 rounded-xl text-on-surface placeholder:text-outline/40 font-medium py-3 pl-12 pr-4 outline-none transition-all" 
+                      placeholder="Page URL (optional — enables PageSpeed data)" 
+                      type="url"
+                      value={htmlUrl}
+                      onChange={(e) => setHtmlUrl(e.target.value)}
+                    />
+                  </div>
+                  <button 
+                    type="submit"
+                    className="w-full sm:w-auto px-10 py-3 bg-gradient-to-br from-primary to-primary-container text-on-primary font-bold rounded-xl shadow-xl hover:brightness-110 active:scale-[0.98] transition-all duration-200 whitespace-nowrap"
+                  >
+                    Analyze HTML
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {error && (
+              <div className="mt-4 flex items-center gap-2 text-error animate-in fade-in slide-in-from-top-1">
+                <span className="material-symbols-outlined text-sm">error</span>
+                <p className="text-sm font-medium">{error}</p>
+              </div>
+            )}
+          </form>
+        </div>
       </section>
 
       {/* Trust Signals */}

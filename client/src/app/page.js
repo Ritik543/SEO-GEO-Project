@@ -11,6 +11,7 @@ export default function Home() {
   const [jobId, setJobId] = useState(null);
   const [report, setReport] = useState(null);
   const [sseMessages, setSseMessages] = useState([]);
+  const [prefillData, setPrefillData] = useState(null);
 
   const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5005';
 
@@ -20,10 +21,12 @@ export default function Home() {
     setReport(null);
 
     try {
+      const payload = typeof url === 'object' ? url : { url };
+      
       const res = await fetch(`${API_BASE}/api/v1/audits`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url }),
+        body: JSON.stringify(payload),
         credentials: 'include',
       });
 
@@ -79,6 +82,13 @@ export default function Home() {
     setJobId(null);
     setReport(null);
     setSseMessages([]);
+    setPrefillData(null);
+  };
+
+  const handleTryHtml = (url) => {
+    setPrefillData({ url, mode: 'html' });
+    setAuditState('idle');
+    setReport(null);
   };
 
   return (
@@ -86,7 +96,7 @@ export default function Home() {
       <Navbar disabled={auditState === 'streaming'} />
 
       {auditState === 'idle' && (
-        <AuditHero onSubmit={handleStartAudit} />
+        <AuditHero onSubmit={handleStartAudit} prefillData={prefillData} />
       )}
 
       {auditState === 'streaming' && (
@@ -94,7 +104,11 @@ export default function Home() {
       )}
 
       {auditState === 'complete' && report && (
-        <Dashboard report={report} onReset={handleReset} />
+        <Dashboard 
+          report={report} 
+          onReset={handleReset} 
+          onTryHtml={handleTryHtml}
+        />
       )}
     </>
   );

@@ -13,7 +13,7 @@ import { CrawlWarningBanner } from '../CrawlWarningBanner/CrawlWarningBanner';
 // Dynamically import html2pdf to avoid SSR issues
 const html2pdf = typeof window !== 'undefined' ? require('html2pdf.js') : null;
 
-export default function Dashboard({ report, onReset }) {
+export default function Dashboard({ report, onReset, onTryHtml }) {
   const pdfRef = useRef();
   
   const { 
@@ -77,7 +77,10 @@ export default function Dashboard({ report, onReset }) {
           </div>
 
           {/* Crawl Warning Banner — shown before scores so user understands any low scores */}
-          <CrawlWarningBanner crawlWarning={crawlWarning} />
+          <CrawlWarningBanner 
+            crawlWarning={crawlWarning} 
+            onTryHtml={() => onTryHtml(url)}
+          />
 
           {/* Scores */}
           <ScorePlane scores={scores} />

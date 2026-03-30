@@ -1,4 +1,5 @@
 const router = require('express').Router();
+const mongoose = require('mongoose');
 const Report = require('../models/Report');
 
 // GET /api/v1/history?page=1&limit=20&search=example.com
@@ -38,10 +39,15 @@ router.get('/', async (req, res) => {
 router.delete('/:id', async (req, res) => {
   try {
     // ALWAYS filter by userId — never delete another user's report
-    const report = await Report.findOneAndDelete({
-      _id: req.params.id,
+    const query = {
+      $or: [
+        { jobId: req.params.id },
+        ...(mongoose.Types.ObjectId.isValid(req.params.id) ? [{ _id: req.params.id }] : [])
+      ],
       userId: req.userId
-    });
+    };
+
+    const report = await Report.findOneAndDelete(query);
     if (!report) return res.status(404).json({ error: 'Report not found' });
     res.json({ message: 'Report deleted' });
   } catch (e) {
